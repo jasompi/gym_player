@@ -1,2 +1,2 @@
-# gym_player
+# GYM Player
 gymnasium player with reinforcement learning
