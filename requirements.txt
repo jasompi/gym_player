@@ -1,5 +1,5 @@
 gym==0.26.2
-gymnasium==1.1.1
+gymnasium[box2d]==1.1.1
 imageio==2.37.0
 imageio-ffmpeg==0.6.0
 ipykernel==6.29.5

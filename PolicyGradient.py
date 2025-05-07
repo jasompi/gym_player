@@ -25,6 +25,11 @@ hyperparameters = {
         "gamma": 1.0,
         "lr": 0.01,
     },
+    'LunarLander':  {
+        "layers": [8],
+        "gamma": 0.99,
+        "lr": 0.01,
+    },
 }
 
 class Policy(nn.Module):
@@ -94,7 +99,8 @@ def create_policy(env, args, verbose=0):
     parser.add_argument('-g', '--gamma', help='discount rate for reward')
     parser.add_argument('-L', '--lr', type=float, help='learning rate')
     args = parser.parse_args(args)
-    hp = hyperparameters[envId.split('-')[0]] or hyperparameters['default']
+    
+    hp = hyperparameters.get(envId.split('-')[0], hyperparameters['default'])
     if args.layers is not None:
         hp['layers'] = args.layers
     if args.lr:
@@ -112,7 +118,7 @@ def load_policy(env, state, verbose=0):
     s_size = env.observation_space.shape[0]
     a_size = env.action_space.n
 
-    hp = state['hp'] or hyperparameters[envId.split('-')[0]] or hyperparameters['default']
+    hp = state.get('hp', hyperparameters.get(envId.split('-')[0], hyperparameters['default']))
     
     policy = Policy(s_size, a_size, hp['layers'], hp=hp)
     policy.load_state_dict(state['model'])

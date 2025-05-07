@@ -77,7 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose', action="count", default=0, help="Increase verbosity level")
     parser.add_argument('-e', '--envId', help='environment Id')
     parser.add_argument('-n', '--num-episode', type=int, help='number of episode')
-    parser.add_argument('-m', '--max-step', type=int, default=1000, help='max number of step in an episode')
+    parser.add_argument('-m', '--max-step', type=int, help='max number of step in an episode')
     parser.add_argument('-u', '--evaluation-episode', type=int, help='evaluation episode')
     parser.add_argument('-p', '--policy', default='RandomPolicy', help='policy module name')
     parser.add_argument('-t', '--train', action='store_true', help='train the policy')
@@ -100,20 +100,22 @@ if __name__ == '__main__':
     if args.filename:
         state = torch.load(args.filename)
     
-    envId = state['env'] if 'env' in state else args.envId
+    envId = state.get('env', args.envId)
     if not envId:
         print("Please provide an environment ID or a filename to load a environment.")
         parser.print_help()
         exit(0)
+    
+    max_step = args.max_step or state.get('max_step', None)
 
     # Initialise the environment
-    env = gym.make(envId, max_episode_steps=args.max_step, render_mode=render_mode)
+    env = gym.make(envId, max_episode_steps=max_step, render_mode=render_mode)
 
-    policyName = state['policy'] if 'policy' in state else args.policy
+    policyName = state.get('policy', args.policy)
     try:
         pm = importlib.import_module(policyName)
     except ImportError:
-        print(f"Policy module {args.policy} not found.")
+        print(f"Policy module {policyName} not found.")
         exit(1)
 
     policy = pm.load_policy(env, state, verbose=args.verbose) if state else pm.create_policy(env, unrecognized, verbose=args.verbose)
@@ -121,18 +123,21 @@ if __name__ == '__main__':
     n_episode = args.num_episode or (1000 if args.train else 10)
  
     if args.train:
-        print(f'train {args.policy} for {envId} for {n_episode} episodes')
+        print(f'train {policyName} for {envId} for {n_episode} episodes with {max_step} steps')
         eval_episode = args.evaluation_episode or int(n_episode / 25) or n_episode
     else:
-        print(f'eval {args.policy} for {envId} ro {n_episode} episodes')
+        print(f'eval {policyName} for {envId} ro {n_episode} episodes with {max_step} steps')
         eval_episode = n_episode
 
     run_agent(env, n_episode, eval_episode, policy, train=args.train, verbose=args.verbose, out_directory=out_directory)
     if args.train:
+        filename = args.filename
+        if state or not filename:
+            filename = f'{envId}-{policyName}-{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}.pt'
         state = policy.get_state_dict()
         state['env'] = envId
-        state['policy'] = args.policy
-        filename = args.filename or f'{envId}-{args.policy}-{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}.pt'
+        state['policy'] = policyName
+        state['max_step'] = max_step
         torch.save(state, filename)
         print(f"Policy saved to {filename}")
 
