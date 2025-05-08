@@ -1,20 +1,20 @@
+import agent
 import argparse
 import collections
-import datetime
-
 import gymnasium as gym
+import logging
 import numpy as np
-
-# PyTorch
 import torch
+import torch.distributions as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import torch.distributions as dist
+import torch.types as torch_types
+from typing import List, Dict, Tuple, Any, Optional
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-def LunarLander_preprocess(replay_buffer):
+def LunarLander_preprocess(replay_buffer: List[Tuple[np.ndarray, int, float, np.ndarray, torch.Tensor]]) -> List[Tuple[np.ndarray, int, float, np.ndarray, torch.Tensor]]:
     # Preprocess the replay buffer for LunarLander
     # Increase the reward for action 0 (noop) if the lander is in a good position
     total_reward = 0
@@ -47,29 +47,29 @@ hyperparameters = {
     },
 }
 
-class Policy(nn.Module):
-    def __init__(self, s_size, a_size, h_sizes, hp={}):
-        super(Policy, self).__init__()
+class PolicyGradientAgent(nn.Module, agent.Agent):
+    def __init__(self, s_size: int, a_size: int, h_sizes: List[int], hp : Dict[str, Any]={}):
+        super(PolicyGradientAgent, self).__init__()
         self._layers = nn.ModuleList([nn.Linear(*lu) for lu in zip([s_size] + h_sizes, h_sizes + [a_size])])
         self._optimizer = None
-        # print(self._layers)
         self._hp = hp
         self._gamma = hp['gamma']
+        logging.debug(f'layers: {self._layers}')
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         for layer in self._layers[:-1]:
             x = F.relu(layer(x))
         x = self._layers[-1](x)
         return F.softmax(x, dim=1)
 
-    def act(self, state):
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        probs = self.forward(state).cpu()
+    def act(self, state: np.ndarray) -> Tuple[torch_types.Number, Optional[torch.Tensor]]:
+        t_state = torch.from_numpy(state).float().unsqueeze(0).to(device)
+        probs = self.forward(t_state).cpu()
         m = dist.Categorical(probs)
         action = m.sample()
         return action.item(), m.log_prob(action)
 
-    def reinforce(self, replay_buffer):
+    def reinforce(self, replay_buffer: List[Tuple[np.ndarray, int, float, np.ndarray, torch.Tensor]]):
         if not self._optimizer:
             self._optimizer = optim.Adam(self.parameters(), lr=self._hp['lr'])
 
@@ -99,53 +99,52 @@ class Policy(nn.Module):
         policy_loss.backward()
         self._optimizer.step()
     
-    def get_state_dict(self):
+    def get_state_dict(self) -> Dict[str, Any]:
         state = {
             'model': self.state_dict(),
-            'hp': self._hp,
+            'hp': self._hp.copy(),
         }
         del state['hp']['prep']
         if self._optimizer:
             state['optimizer'] = self._optimizer.state_dict()
         return state
 
-def create_policy(env, args, verbose=0):
-    envId = env.spec.id
-    s_size = env.observation_space.shape[0]
-    a_size = env.action_space.n
+def create_agent(env: gym.Env, args: List[str]) -> agent.Agent:
+    envId = env.spec.id # type: ignore
+    s_size = env.observation_space.shape[0] # type: ignore
+    a_size = env.action_space.n # type: ignore
+
     parser = argparse.ArgumentParser()
     parser.add_argument('-l', '--layers', type=int, nargs='*', help='an integer for the accumulator')
     parser.add_argument('-g', '--gamma', help='discount rate for reward')
     parser.add_argument('-L', '--lr', type=float, help='learning rate')
-    args = parser.parse_args(args)
+    parsed_args = parser.parse_args(args)
     
     hp = hyperparameters.get(envId.split('-')[0], hyperparameters['default'])
-    if args.layers is not None:
-        hp['layers'] = args.layers
-    if args.lr:
-        hp['lr'] = args.lr
-    if args.gamma:
-        hp['gamma'] = args.gamma
+    if parsed_args.layers is not None:
+        hp['layers'] = parsed_args.layers
+    if parsed_args.lr:
+        hp['lr'] = parsed_args.lr
+    if parsed_args.gamma:
+        hp['gamma'] = parsed_args.gamma
 
-    if verbose:
-        print(f"Creating policy for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
+    logging.info(f"Creating policy for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
     
-    return Policy(s_size, a_size, hp['layers'], hp=hp)
+    return PolicyGradientAgent(s_size, a_size, hp['layers'], hp=hp)
 
-def load_policy(env, state, verbose=0):
-    envId = env.spec.id
-    s_size = env.observation_space.shape[0]
-    a_size = env.action_space.n
+def load_agent(env: gym.Env, state: Dict[str, Any]) -> agent.Agent:
+    envId = env.spec.id # type: ignore
+    s_size = env.observation_space.shape[0] # type: ignore
+    a_size = env.action_space.n # type: ignore
 
     hp = hyperparameters.get(envId.split('-')[0], hyperparameters['default']) | state.get('hp', {})
     
-    policy = Policy(s_size, a_size, hp['layers'], hp=hp)
-    policy.load_state_dict(state['model'])
+    agent = PolicyGradientAgent(s_size, a_size, hp['layers'], hp=hp)
+    agent.load_state_dict(state['model'])
     if 'optimizer' in state:
-        policy._optimizer = optim.Adam(policy.parameters(), lr=hp['lr'])
-        policy._optimizer.load_state_dict(state['optimizer'])
+        agent._optimizer = optim.Adam(agent.parameters(), lr=hp['lr'])
+        agent._optimizer.load_state_dict(state['optimizer'])
     
-    if verbose:
-        print(f"Loading policy for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
+    logging.info(f"Loading policy for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
 
-    return policy
+    return agent
