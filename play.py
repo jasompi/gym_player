@@ -33,6 +33,8 @@ def play_episode(env, episode, policy, train=False, verbose=0, render=False):
         total_reward += reward
         if train:
             replay_buffer.append((state, action, reward, new_state, extra))
+        if verbose > 2:
+            print(f'{env.spec.id} Episode: {episode}:{i}; action: {action}; reward: {reward}; total_reward: {total_reward}; state: {state}')
         state = new_state
 
         # If the episode has ended then we can reset to start a new episode

@@ -14,21 +14,36 @@ import torch.distributions as dist
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+def LunarLander_preprocess(replay_buffer):
+    # Preprocess the replay buffer for LunarLander
+    # Increase the reward for action 0 (noop) if the lander is in a good position
+    total_reward = 0
+    for i in range(len(replay_buffer)):
+        state, action, reward, new_state, log_prob = replay_buffer[i]
+        total_reward += reward
+        if abs(state[0]) < 0.1 and abs(state[1] < 0.01) and abs(state[3]) < 0.1 and total_reward > 150 and action == 0 and reward > 0:
+            reward *= 2
+        replay_buffer[i] = (state, action, reward, new_state, log_prob)
+    return replay_buffer
+
 hyperparameters = {
     'default': {
         'layers': [],
         'gamma': 0.99,
-        'lr': 0.01
+        'lr': 0.01,
+        'prep': None
     },
     'CartPole':  {
-        "layers": [16],
-        "gamma": 1.0,
-        "lr": 0.01,
+        'layers': [16],
+        'gamma': 1.0,
+        'lr': 0.01,
+        'prep': None
     },
     'LunarLander':  {
-        "layers": [8],
-        "gamma": 0.99,
-        "lr": 0.01,
+        'layers': [],
+        'gamma': 0.99,
+        'lr': 0.01,
+        'prep': LunarLander_preprocess,
     },
 }
 
@@ -58,6 +73,9 @@ class Policy(nn.Module):
         if not self._optimizer:
             self._optimizer = optim.Adam(self.parameters(), lr=self._hp['lr'])
 
+        if self._hp['prep']:
+            replay_buffer = self._hp['prep'](replay_buffer)
+        
         n_step = len(replay_buffer)
         returns = collections.deque(maxlen=n_step)
         rewards = [t[2] for t in replay_buffer]
@@ -86,6 +104,7 @@ class Policy(nn.Module):
             'model': self.state_dict(),
             'hp': self._hp,
         }
+        del state['hp']['prep']
         if self._optimizer:
             state['optimizer'] = self._optimizer.state_dict()
         return state
@@ -118,7 +137,7 @@ def load_policy(env, state, verbose=0):
     s_size = env.observation_space.shape[0]
     a_size = env.action_space.n
 
-    hp = state.get('hp', hyperparameters.get(envId.split('-')[0], hyperparameters['default']))
+    hp = hyperparameters.get(envId.split('-')[0], hyperparameters['default']) | state.get('hp', {})
     
     policy = Policy(s_size, a_size, hp['layers'], hp=hp)
     policy.load_state_dict(state['model'])
