@@ -44,10 +44,11 @@ class Agent:
         """
         return 0, None
     
-    def reinforce(self, experiences: collections.deque[Experience]):
+    def reinforce(self, experiences: collections.deque[Experience], new_experience: int):
         """Perform reinforcement learning update.
         Args:
             experiences (collections.deque[Experience]): A deque of experiences to update the agent.
+            new_experience (int): The new experience added to the deque.
         """
         pass
     

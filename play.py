@@ -14,9 +14,13 @@ import sys
 import torch
 from typing import List, Dict, Tuple, Any, Optional
 
-MAX_EXPERIENCES_SIZE = 10000
+MAX_EXPERIENCES_SIZE = 100_000
 
-def play_episode(env, episode: int, agent: Agent, experiences: Optional[collections.deque[Experience]] = None, frame_buffer: Optional[List[np.ndarray]] = None) -> float:
+def play_episode(env,
+                 episode: int,
+                 agent: Agent,
+                 experiences: Optional[collections.deque[Experience]] = None,
+                 frame_buffer: Optional[List[np.ndarray]] = None) -> Tuple[float, int]:
     """Play a single episode in the environment using the given agent.
     Args:
         env (gym.Env): The environment to play in.
@@ -25,7 +29,7 @@ def play_episode(env, episode: int, agent: Agent, experiences: Optional[collecti
         experiences (List[Experience]): List of experiences to collect.
         frame_buffer (List[np.ndarray]): Buffer to store frames for rendering.
     Returns:
-        Tuple[float, List[np.ndarray]]: The total reward and a list of frames if rendered.
+        Tuple[float, int]: The total reward and the number of steps.
     """
     agent.train(experiences is not None)
 
@@ -54,9 +58,9 @@ def play_episode(env, episode: int, agent: Agent, experiences: Optional[collecti
         if done or truncated:
             break
     logging.debug(f'{env.spec.id} Episode: {episode}; terminated: {done} in {i} steps; total reward: {total_reward}')
-    return total_reward
+    return total_reward, i + 1
 
-def eval_output(e, episode_scores: List[float], verbose: int=0):
+def eval_output(e: int, episode_scores: List[float], verbose: int=0):
     if episode_scores:
         mean_reward = np.mean(episode_scores)
         std_reward = np.std(episode_scores)
@@ -73,7 +77,7 @@ def run_agent(env, n_episode: int, evaluation_episode: int, agent, train: bool, 
     frame_buffer: List[np.ndarray] = []
     try:
         for e in range(1, n_episode + 1):
-            reward = play_episode(env, e, agent, experiences if train else None, frame_buffer if out_directory else None)
+            reward, steps = play_episode(env, e, agent, experiences if train else None, frame_buffer if out_directory else None)
             scores_deque.append(reward)
             if len(frame_buffer) and out_directory:
                 filename = os.path.join(out_directory, f'{env.spec.id}-episode-{e}.mp4')
@@ -82,7 +86,7 @@ def run_agent(env, n_episode: int, evaluation_episode: int, agent, train: bool, 
                 frame_buffer.clear()
             if train and experiences:
                 logging.info(f'{env.spec.id} Episode: {e} training agent with {len(experiences)} experiences')
-                agent.reinforce(experiences)
+                agent.reinforce(experiences, steps)
 
             if e % evaluation_episode == 0:
                 mean_score, std_score = eval_output(e, list(scores_deque), verbose=verbose)

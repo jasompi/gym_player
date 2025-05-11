@@ -69,7 +69,7 @@ class PolicyGradientAgent(nn.Module, Agent):
         action = m.sample()
         return action.item(), m.log_prob(action)
 
-    def reinforce(self, experiences: collections.deque[Experience]):
+    def reinforce(self, experiences: collections.deque[Experience], new_experience: int):
         if not self._optimizer:
             self._optimizer = optim.Adam(self.parameters(), lr=self._hp['lr'])
 
