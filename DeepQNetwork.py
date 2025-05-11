@@ -24,7 +24,7 @@ hyperparameters = {
         'layers': [],
         'gamma': 0.99,
         'lr': 0.001,
-        'tau': 0.001,
+        'tau': 0.0,
         'epsilon_min': 0.01,
         'epsilon_decay': 0.95,
      },
@@ -32,7 +32,7 @@ hyperparameters = {
         'layers': [16],
         'gamma': 1.0,
         'lr': 0.01,
-        'tau': 0.0,
+        'tau': 0.001,
         'epsilon_min': 0.05,
         'epsilon_decay': 0.95,
     },
@@ -40,7 +40,7 @@ hyperparameters = {
         'layers': [64, 64],
         'gamma': 0.995,
         'lr': 0.001,
-        'tau': 0.001,
+        'tau': 0.0,
         'epsilon_min': 0.01,
         'epsilon_decay': 0.995,
     },
@@ -171,7 +171,7 @@ def create_agent(env: gym.Env, args: List[str]) -> Agent:
     if parsed_args.epsilon_decay:
         hp['epsilon_decay'] = min(max(0.0, parsed_args.epsilon_decay), 1.0)
 
-    logging.info(f"Creating policy for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
+    print(f"Creating DeepQNetwork for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
     
     return DQNAgent(s_size, a_size, hp['layers'], hp=hp)
 
@@ -185,6 +185,6 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     agent = DQNAgent(s_size, a_size, hp['layers'], hp=hp)
     agent.load_state_dict(state)
     
-    logging.info(f"Loading policy for {envId} with layers: {hp['layers']}, gamma: {agent._gamma}, lr: {hp['lr']}, epsilon: {agent._epsilon}, total_updates: {agent._total_updates}")
+    print(f"Loading DeepQNetwork for {envId} with layers: {hp['layers']}, gamma: {agent._gamma}, lr: {hp['lr']}, tau: {agent._tau}, epsilon_decay: {agent._epsilon_decay}, epsilon: {agent._epsilon}, total_updates: {agent._total_updates}")
 
     return agent

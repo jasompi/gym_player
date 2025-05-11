@@ -129,7 +129,7 @@ def create_agent(env: gym.Env, args: List[str]) -> Agent:
     if parsed_args.gamma:
         hp['gamma'] = parsed_args.gamma
 
-    logging.info(f"Creating policy for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
+    print(f"Creating PolicyGradient for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
     
     return PolicyGradientAgent(s_size, a_size, hp['layers'], hp=hp)
 
@@ -146,6 +146,6 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
         agent._optimizer = optim.Adam(agent.parameters(), lr=hp['lr'])
         agent._optimizer.load_state_dict(state['optimizer'])
     
-    logging.info(f"Loading policy for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
+    print(f"Loading PolicyGradient for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
 
     return agent
