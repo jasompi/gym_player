@@ -1,5 +1,5 @@
 
-import agent
+from agent import Agent
 import gymnasium as gym
 import logging
 import numpy as np
@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.types as torch_types
 from typing import List, Dict, Tuple, Any, Optional
 
-class RandomAgent(agent.Agent):
+class RandomAgent(Agent):
     def __init__(self, a_size: int):
         """Initialize the random policy agent with the action space size.
         Args:
@@ -34,7 +34,7 @@ class RandomAgent(agent.Agent):
         }
 
 
-def create_agent(env: gym.Env, parameters: List[str]) -> agent.Agent:
+def create_agent(env: gym.Env, parameters: List[str]) -> Agent:
     """Create a random policy agent for the given environment.
     Args:
         env (gym.Env): The environment to create the agent for.
@@ -45,7 +45,7 @@ def create_agent(env: gym.Env, parameters: List[str]) -> agent.Agent:
     logging.info(f"Creating random policy for {env.spec.id}") # type: ignore
     return RandomAgent(env.action_space.n) # type: ignore
 
-def load_agent(env: gym.Env, state: Dict[str, Any]) -> agent.Agent:
+def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     """Load a random policy agent from the given state.
     Args:
         env (gym.Env): The environment to load the agent for.

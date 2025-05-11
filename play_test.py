@@ -25,7 +25,7 @@ class TestPlayMain(unittest.TestCase):
             os.makedirs(tmpdir)
         os.chdir(tmpdir)
         video_dir =  'videos'
-        output = self.run_main([f'-e={env_id}', f'-a={agent}', '-n=3', f'-m={max_steps}', f'-r={video_dir}', '-t', '-l=ERROR'])
+        output = self.run_main([f'-e={env_id}', f'-a={agent}', '-n=3', f'-m={max_steps}', f'-r={video_dir}', '-t', '--log=ERROR'])
 
         self.assertTrue(os.path.exists(video_dir), "video directory not created")
         lines = output.split('\n')

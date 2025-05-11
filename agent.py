@@ -1,10 +1,26 @@
+import collections
 import gymnasium as gym
-import logging
 import numpy as np
-import random
 import torch
 import torch.types as torch_types
-from typing import List, Dict, Tuple, Any, Optional
+from typing import List, Dict, NamedTuple, Tuple, Any, Optional
+
+class Experience(NamedTuple):
+    """Experience tuple for reinforcement learning.
+    Attributes:
+        state (np.ndarray): The current state of the environment.
+        action (int): The action taken.
+        reward (float): The reward received.
+        new_state (np.ndarray): The new state after taking the action.
+        done (bool): Whether the episode has ended.
+        log_prob (torch.Tensor): The log probability of the action taken.
+    """
+    state: np.ndarray
+    action: torch_types.Number
+    reward: float
+    new_state: np.ndarray
+    done: bool
+    extra: Optional[torch.Tensor]
 
 class Agent:
     def __init__(self):
@@ -17,7 +33,7 @@ class Agent:
             train (bool): If True, set the agent to training mode.
         """
         pass
-
+    
     def act(self, state: np.ndarray) -> Tuple[torch_types.Number, Optional[torch.Tensor]]:
         """Select an action from the action space base on the current state.
         Args:
@@ -28,11 +44,10 @@ class Agent:
         """
         return 0, None
     
-    def reinforce(self, replay_buffer: List[Tuple[np.ndarray, int, float, np.ndarray, torch.Tensor]]):
+    def reinforce(self, experiences: collections.deque[Experience]):
         """Perform reinforcement learning update.
         Args:
-            replay_buffer (List[Tuple[np.ndarray, int, float, np.ndarray, torch.Tensor]]): The replay buffer
-            containing the transitions to update the policy.
+            experiences (collections.deque[Experience]): A deque of experiences to update the agent.
         """
         pass
     

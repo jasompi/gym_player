@@ -1,4 +1,4 @@
-import agent
+from agent import Agent, Experience
 import argparse
 import collections
 import gymnasium as gym
@@ -14,17 +14,17 @@ from typing import List, Dict, Tuple, Any, Optional
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-def LunarLander_preprocess(replay_buffer: List[Tuple[np.ndarray, int, float, np.ndarray, torch.Tensor]]) -> List[Tuple[np.ndarray, int, float, np.ndarray, torch.Tensor]]:
-    # Preprocess the replay buffer for LunarLander
+def LunarLander_preprocess_experiences(experiences: List[Experience]) -> List[Experience]:
+    # Preprocess the experience for LunarLander
     # Increase the reward for action 0 (noop) if the lander is in a good position
     total_reward = 0
-    for i in range(len(replay_buffer)):
-        state, action, reward, new_state, log_prob = replay_buffer[i]
+    for i in range(len(experiences)):
+        state, action, reward, new_state, done, log_prob = experiences[i]
         total_reward += reward
-        if abs(state[0]) < 0.1 and abs(state[1] < 0.01) and abs(state[3]) < 0.1 and total_reward > 150 and action == 0 and reward > 0:
+        if abs(state[0]) < 0.1 and abs(state[1]) < 0.01 and abs(state[3]) < 0.1 and total_reward > 150 and action == 0 and reward > 0:
             reward *= 2
-        replay_buffer[i] = (state, action, reward, new_state, log_prob)
-    return replay_buffer
+        experiences[i] = Experience(state, action, reward, new_state, done, log_prob)
+    return experiences
 
 hyperparameters = {
     'default': {
@@ -40,14 +40,14 @@ hyperparameters = {
         'prep': None
     },
     'LunarLander':  {
-        'layers': [],
+        'layers': [8],
         'gamma': 0.99,
         'lr': 0.01,
-        'prep': LunarLander_preprocess,
+        'prep': LunarLander_preprocess_experiences,
     },
 }
 
-class PolicyGradientAgent(nn.Module, agent.Agent):
+class PolicyGradientAgent(nn.Module, Agent):
     def __init__(self, s_size: int, a_size: int, h_sizes: List[int], hp : Dict[str, Any]={}):
         super(PolicyGradientAgent, self).__init__()
         self._layers = nn.ModuleList([nn.Linear(*lu) for lu in zip([s_size] + h_sizes, h_sizes + [a_size])])
@@ -69,17 +69,17 @@ class PolicyGradientAgent(nn.Module, agent.Agent):
         action = m.sample()
         return action.item(), m.log_prob(action)
 
-    def reinforce(self, replay_buffer: List[Tuple[np.ndarray, int, float, np.ndarray, torch.Tensor]]):
+    def reinforce(self, experiences: collections.deque[Experience]):
         if not self._optimizer:
             self._optimizer = optim.Adam(self.parameters(), lr=self._hp['lr'])
 
         if self._hp['prep']:
-            replay_buffer = self._hp['prep'](replay_buffer)
+            experiences = self._hp['prep'](experiences)
         
-        n_step = len(replay_buffer)
+        n_step = len(experiences)
         returns = collections.deque(maxlen=n_step)
-        rewards = [t[2] for t in replay_buffer]
-        log_probs = [t[4] for t in replay_buffer]
+        rewards = [e.reward for e in experiences]
+        log_probs = [e.extra for e in experiences]
         
         for t in reversed(range(n_step)):
             disc_return_t = (returns[0] if len(returns) > 0 else 0)
@@ -92,12 +92,13 @@ class PolicyGradientAgent(nn.Module, agent.Agent):
         
         policy_loss = []
         for (log_prob, disc_return) in zip(log_probs, returns):
-            policy_loss.append(-log_prob * disc_return)
+            policy_loss.append(-log_prob * disc_return) # type: ignore
         policy_loss = torch.cat(policy_loss).sum()
         
         self._optimizer.zero_grad()
         policy_loss.backward()
         self._optimizer.step()
+        experiences.clear()
     
     def get_state_dict(self) -> Dict[str, Any]:
         state = {
@@ -109,7 +110,7 @@ class PolicyGradientAgent(nn.Module, agent.Agent):
             state['optimizer'] = self._optimizer.state_dict()
         return state
 
-def create_agent(env: gym.Env, args: List[str]) -> agent.Agent:
+def create_agent(env: gym.Env, args: List[str]) -> Agent:
     envId = env.spec.id # type: ignore
     s_size = env.observation_space.shape[0] # type: ignore
     a_size = env.action_space.n # type: ignore
@@ -132,7 +133,7 @@ def create_agent(env: gym.Env, args: List[str]) -> agent.Agent:
     
     return PolicyGradientAgent(s_size, a_size, hp['layers'], hp=hp)
 
-def load_agent(env: gym.Env, state: Dict[str, Any]) -> agent.Agent:
+def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     envId = env.spec.id # type: ignore
     s_size = env.observation_space.shape[0] # type: ignore
     a_size = env.action_space.n # type: ignore
