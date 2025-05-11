@@ -117,8 +117,8 @@ def create_agent(env: gym.Env, args: List[str]) -> Agent:
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-l', '--layers', type=int, nargs='*', help='an integer for the accumulator')
-    parser.add_argument('-g', '--gamma', help='discount rate for reward')
-    parser.add_argument('-L', '--lr', type=float, help='learning rate')
+    parser.add_argument('--lr', type=float, help='learning rate')
+    parser.add_argument('--gamma', help='discount rate for reward')
     parsed_args = parser.parse_args(args)
     
     hp = hyperparameters.get(envId.split('-')[0], hyperparameters['default'])

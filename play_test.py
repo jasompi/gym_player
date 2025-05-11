@@ -68,6 +68,13 @@ class TestPlayMain(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             self.run_test(env_id, policy, tmpdir)
 
+    def test_CartPole_DeepQNetwork(self):
+        env_id = 'CartPole-v1'
+        policy = 'DeepQNetwork'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+
     def test_LunaarLander_RandomPolicy(self):
         env_id = 'LunarLander-v3'
         policy = 'RandomPolicy'
@@ -78,6 +85,13 @@ class TestPlayMain(unittest.TestCase):
     def test_LunarLander_PolicyGradient(self):
         env_id = 'LunarLander-v3'
         policy = 'PolicyGradient'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+
+    def test_LunarLander_DeepQNetwork(self):
+        env_id = 'LunarLander-v3'
+        policy = 'DeepQNetwork'
         
         with tempfile.TemporaryDirectory() as tmpdir:
             self.run_test(env_id, policy, tmpdir)

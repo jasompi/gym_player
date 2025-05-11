@@ -90,7 +90,7 @@ def run_agent(env, n_episode: int, evaluation_episode: int, agent, train: bool, 
 
             if e % evaluation_episode == 0:
                 mean_score, std_score = eval_output(e, list(scores_deque), verbose=verbose)
-                if mean_score - 2 * std_score >= score:
+                if mean_score >= score:
                     print(f"Stopping training at episode {e} with mean score: {mean_score:.2f}, std: {std_score:.2f}")
                     break
                 scores_deque.clear()
