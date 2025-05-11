@@ -11,6 +11,7 @@ import logging
 import numpy as np
 import os
 import sys
+import time
 import torch
 from typing import List, Dict, Tuple, Any, Optional
 
@@ -75,10 +76,13 @@ def run_agent(env, n_episode: int, evaluation_episode: int, agent, train: bool, 
     scores_deque = collections.deque(maxlen=evaluation_episode)
     experiences: collections.deque[Experience] = collections.deque(maxlen=MAX_EXPERIENCES_SIZE)
     frame_buffer: List[np.ndarray] = []
+    total_steps = 0
+    start = time.time()
     try:
         for e in range(1, n_episode + 1):
             reward, steps = play_episode(env, e, agent, experiences if train else None, frame_buffer if out_directory else None)
             scores_deque.append(reward)
+            total_steps += steps
             if len(frame_buffer) and out_directory:
                 filename = os.path.join(out_directory, f'{env.spec.id}-episode-{e}.mp4')
                 imageio.mimwrite(filename, [np.array(img_frame) for _, img_frame in enumerate(frame_buffer)], fps=env.metadata['render_fps'])
@@ -100,19 +104,22 @@ def run_agent(env, n_episode: int, evaluation_episode: int, agent, train: bool, 
 
     except KeyboardInterrupt:
         print("\nProgram interrupted by user.")
+    total_time = time.time() - start
+    if verbose > 0:
+        print(f"Total time: {total_time:.2f} seconds for {total_steps} steps in {e} episodes. {total_steps / total_time:.2f} steps/sec")
 
 def main(argv: List[str]):
     parser = argparse.ArgumentParser(description='Train and play gymnasium environment.')
     parser.add_argument('-v', '--verbose', action="count", default=0, help="Increase verbosity level")
     parser.add_argument('-e', '--envId', help='environment Id')
     parser.add_argument('-a', '--agent', default='RandomPolicy', help='agent module name')
-    parser.add_argument('-f', '--filename', type=str, help='filename load the previous training state')
+    parser.add_argument('-f', '--filename', type=str, help='filename load the previous trained agent')
     parser.add_argument('-n', '--num-episode', type=int, help='number of episode')
     parser.add_argument('-m', '--max-step', type=int, help='max number of step in an episode')
-    parser.add_argument('-u', '--evaluation-episode', type=int, help='evaluation episode')
-    parser.add_argument('-t', '--train', action='store_true', help='train the policy')
+    parser.add_argument('-u', '--evaluation-episode', type=int, help='show evaluation score every number of episode')
+    parser.add_argument('-t', '--train', action='store_true', help='train the agent')
     parser.add_argument('-s', '--score', type=float, default=float('inf'), help='score threshold to stop training')
-    parser.add_argument('-r', '--render', help='render mode display or video output folder')
+    parser.add_argument('-r', '--render', help='render mode. `display` to rander on display or PATH to record video for every episode and save it to PATH')
     parser.add_argument('--log', default=logging.WARNING, help='log level')
 
     args, unrecognized = parser.parse_known_args(argv)

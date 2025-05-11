@@ -54,6 +54,7 @@ class PolicyGradientAgent(nn.Module, Agent):
         self._optimizer = None
         self._hp = hp
         self._gamma = hp['gamma']
+        self = self.to(device)
         logging.debug(f'layers: {self._layers}')
 
     def forward(self, x: torch.Tensor):
@@ -79,7 +80,7 @@ class PolicyGradientAgent(nn.Module, Agent):
         n_step = len(experiences)
         returns = collections.deque(maxlen=n_step)
         rewards = [e.reward for e in experiences]
-        log_probs = [e.extra for e in experiences]
+        log_probs = [e.extra.to(device) for e in experiences if e.extra is not None]
         
         for t in reversed(range(n_step)):
             disc_return_t = (returns[0] if len(returns) > 0 else 0)
@@ -87,7 +88,7 @@ class PolicyGradientAgent(nn.Module, Agent):
         
         eps = np.finfo(np.float32).eps.item()
         
-        returns = torch.tensor(returns)
+        returns = torch.tensor(returns, dtype=torch.float32, device=device)
         returns = (returns - returns.mean()) / (returns.std() + eps)
         
         policy_loss = []
@@ -102,7 +103,7 @@ class PolicyGradientAgent(nn.Module, Agent):
     
     def get_state_dict(self) -> Dict[str, Any]:
         state = {
-            'model': self.state_dict(),
+            'model': {key: value.cpu() for key, value in self.state_dict().items()},
             'hp': self._hp.copy(),
         }
         del state['hp']['prep']
@@ -111,16 +112,16 @@ class PolicyGradientAgent(nn.Module, Agent):
         return state
 
 def create_agent(env: gym.Env, args: List[str]) -> Agent:
-    envId = env.spec.id # type: ignore
-    s_size = env.observation_space.shape[0] # type: ignore
-    a_size = env.action_space.n # type: ignore
-
     parser = argparse.ArgumentParser()
     parser.add_argument('-l', '--layers', type=int, nargs='*', help='an integer for the accumulator')
     parser.add_argument('--lr', type=float, help='learning rate')
     parser.add_argument('--gamma', help='discount rate for reward')
     parsed_args = parser.parse_args(args)
     
+    envId = env.spec.id # type: ignore
+    s_size = env.observation_space.shape[0] # type: ignore
+    a_size = env.action_space.n # type: ignore
+
     hp = hyperparameters.get(envId.split('-')[0], hyperparameters['default'])
     if parsed_args.layers is not None:
         hp['layers'] = parsed_args.layers
@@ -142,6 +143,7 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     
     agent = PolicyGradientAgent(s_size, a_size, hp['layers'], hp=hp)
     agent.load_state_dict(state['model'])
+    agent = agent.to(device)
     if 'optimizer' in state:
         agent._optimizer = optim.Adam(agent.parameters(), lr=hp['lr'])
         agent._optimizer.load_state_dict(state['optimizer'])
@@ -149,3 +151,6 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     print(f"Loading PolicyGradient for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
 
     return agent
+
+if __name__ == "__main__":
+    create_agent(None, ['-h'])

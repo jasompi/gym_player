@@ -42,7 +42,7 @@ def create_agent(env: gym.Env, parameters: List[str]) -> Agent:
     Returns:
         Agent: The created random policy agent.
     """
-    logging.info(f"Creating random policy for {env.spec.id}") # type: ignore
+    print(f"Creating RandomPolicy for {env.spec.id}") # type: ignore
     return RandomAgent(env.action_space.n) # type: ignore
 
 def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
@@ -53,6 +53,6 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     Returns:
         Agent: The loaded random policy agent of output.
     """    
-    logging.info(f"Loading random policy for {env.spec.id}") # type: ignore
+    print(f"Loading RandomPolicy for {env.spec.id}") # type: ignore
     assert state['a_size'] == env.action_space.n, "action space size mismatch" # type: ignore
     return RandomAgent(env.action_space.n) # type: ignore

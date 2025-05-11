@@ -62,11 +62,12 @@ class DeepQNetwork(nn.Module):
 class DQNAgent(Agent):
     def __init__(self, s_size: int, a_size: int, h_sizes: List[int], hp : Dict[str, Any]={}):
         super().__init__()
-        self._q_network = DeepQNetwork(s_size, a_size, h_sizes)
+        self._q_network = DeepQNetwork(s_size, a_size, h_sizes).to(device)
         self._q_network.train(False)
         self._target_q_network = DeepQNetwork(s_size, a_size, h_sizes)
-        self._target_q_network.train(False)
         self._target_q_network.load_state_dict(self._q_network.state_dict())
+        self._target_q_network.to(device)
+        self._target_q_network.train(False)
         self._hp = hp
         self._gamma = hp.get('gamma', 0.99)
         self._tau = hp.get('tau', 0.001)
@@ -127,7 +128,7 @@ class DQNAgent(Agent):
     
     def get_state_dict(self) -> Dict[str, Any]:
         state = {
-            'model': self._q_network.state_dict(),
+            'model': {key: value.cpu() for key, value in self._q_network.state_dict().items()},
             'hp': self._hp.copy(),
         }
         state['hp']['epsilon'] = self._epsilon
@@ -138,6 +139,7 @@ class DQNAgent(Agent):
     
     def load_state_dict(self, state: Dict[str, Any]):
         self._q_network.load_state_dict(state['model'])
+        self._q_network = self._q_network.to(device)
         if 'optimizer' in state:
             self._optimizer = optim.Adam(self._q_network.parameters(), lr=self._hp['lr'])
             self._optimizer.load_state_dict(state['optimizer'])
@@ -147,18 +149,18 @@ class DQNAgent(Agent):
 
 
 def create_agent(env: gym.Env, args: List[str]) -> Agent:
-    envId = env.spec.id # type: ignore
-    s_size = env.observation_space.shape[0] # type: ignore
-    a_size = env.action_space.n # type: ignore
-
     parser = argparse.ArgumentParser()
     parser.add_argument('-l', '--layers', type=int, nargs='*', help='an integer for the accumulator')
     parser.add_argument('--lr', type=float, help='learning rate')
     parser.add_argument('--gamma', type=float, help='discount rate for reward')
-    parser.add_argument('--tau', type=float, help='soft update rate')
+    parser.add_argument('--tau', type=float, help='soft update rate. Use 0 for hard update')
     parser.add_argument('--epsilon-decay', type=float, help='epsilon decay rate')
     parsed_args = parser.parse_args(args)
     
+    envId = env.spec.id # type: ignore
+    s_size = env.observation_space.shape[0] # type: ignore
+    a_size = env.action_space.n # type: ignore
+
     hp = hyperparameters.get(envId.split('-')[0], hyperparameters['default'])
     if parsed_args.layers is not None:
         hp['layers'] = parsed_args.layers or []
@@ -188,3 +190,6 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     print(f"Loading DeepQNetwork for {envId} with layers: {hp['layers']}, gamma: {agent._gamma}, lr: {hp['lr']}, tau: {agent._tau}, epsilon_decay: {agent._epsilon_decay}, epsilon: {agent._epsilon}, total_updates: {agent._total_updates}")
 
     return agent
+
+if __name__ == "__main__":
+    create_agent(None, ['-h'])

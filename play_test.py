@@ -29,30 +29,33 @@ class TestPlayMain(unittest.TestCase):
 
         self.assertTrue(os.path.exists(video_dir), "video directory not created")
         lines = output.split('\n')
-        self.assertIn(f'train {agent} for {env_id} for 3 episodes with {max_steps} steps', lines[0])
+        self.assertRegex(lines[0], fr'Creating {agent} for {env_id}')
+        self.assertIn(f'train {agent} for {env_id} for 3 episodes with {max_steps} steps', lines[1])
         for i in range(1, 4):
-            self.assertIn(f'{env_id}-episode-{i}.mp4', lines[i])
+            self.assertIn(f'{env_id}-episode-{i}.mp4', lines[i+1])
             self.assertTrue(os.path.exists(f'{video_dir}/{env_id}-episode-{i}.mp4'), f"video file {i} not created")
     
         pattern = fr'{env_id}-{agent}-\d+\.pt'
-        match = re.search(pattern, lines[4])
+        match = re.search(pattern, lines[5])
         self.assertIsNotNone(match, "Filename pattern not found in output")
         filename = match.group(0) # type: ignore
         self.assertTrue(os.path.exists(filename), "policy file not created")
         
         output = self.run_main([f'-f={filename}', '-t', '-l=ERROR'])
         lines = output.split('\n')
-        self.assertIn(f'train {agent} for {env_id} for 1000 episodes with {max_steps} steps', lines[0])
+        self.assertRegex(lines[0], fr'Loading {agent} for {env_id}')
+        self.assertIn(f'train {agent} for {env_id} for 1000 episodes with {max_steps} steps', lines[1])
 
-        match = re.search(pattern, lines[1])
+        match = re.search(pattern, lines[2])
         self.assertIsNotNone(match, "Filename pattern not found in output")
         filename1 = match.group(0) # type: ignore
         self.assertTrue(os.path.exists(filename1), "policy file not created")
     
         output = self.run_main([f'-f={filename1}', '-r=display', '-n=2', '-v', '-l=ERROR'])
         lines = output.split('\n')
-        self.assertIn(f'eval {agent} for {env_id} for 2 episodes with {max_steps} steps', lines[0])
-        self.assertRegex(lines[1], r'2 episodes rewards mean: (-?\d+\.\d+); std: (\d+\.\d+)')
+        self.assertRegex(lines[0], fr'Loading {agent} for {env_id}')
+        self.assertIn(f'eval {agent} for {env_id} for 2 episodes with {max_steps} steps', lines[1])
+        self.assertRegex(lines[2], r'2 episodes rewards mean: (-?\d+\.\d+); std: (\d+\.\d+)')
         
     def test_CartPole_RandomPolicy(self):
         env_id = 'CartPole-v1'
