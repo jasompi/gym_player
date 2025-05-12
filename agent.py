@@ -20,7 +20,7 @@ class Experience(NamedTuple):
     reward: float
     new_state: np.ndarray
     done: bool
-    extra: Optional[torch.Tensor]
+    extra: torch.Tensor|torch_types.Number|None
 
 class Agent:
     def __init__(self):

@@ -19,6 +19,15 @@ UPDATES_PER_EPSILON_DECAY = 1000
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+def SARSA_preprocess_experiences(experiences: List[Experience]) -> List[Experience]:
+    for i in reversed(range(len(experiences)  - 1)):
+        state, action, reward, new_state, done, new_action = experiences[i]
+        if new_action is not None:
+            break
+        new_action = experiences[i + 1].action if not done else 0
+        experiences[i] = Experience(state, action, reward, new_state, done, new_action)
+    return experiences
+
 hyperparameters = {
     'default': {
         'layers': [],
@@ -75,12 +84,17 @@ class DQNAgent(Agent):
         self._epsilon_decay = hp.get('epsilon_decay', 0.95)
         self._epsilon = hp.get('epsilon', 1.0)
         self._total_updates = hp.get('total_updates', 0)
+        self._sarsa = hp.get('sarsa', False)
         self._a_size = a_size
         self._optimizer = None
         self._train = False
 
     def train(self, train: bool):
         self._train = train
+    
+    @property
+    def name(self) -> str:
+        return 'SARSA' if self._sarsa else super().name
  
     def act(self, state: np.ndarray) -> Tuple[torch_types.Number, Optional[torch.Tensor]]:
         if self._train and np.random.rand() <= self._epsilon:
@@ -98,18 +112,27 @@ class DQNAgent(Agent):
     def reinforce(self, experiences: List[Experience], new_experiences: int):
         if not self._optimizer:
             self._optimizer = optim.Adam(self._q_network.parameters(), lr=self._hp['lr'])
-        if len(experiences) > MINI_BATCH_SIZE:
+
+        if self._sarsa:
+            experiences = SARSA_preprocess_experiences(experiences)
+
+        if len(experiences) > MINI_BATCH_SIZE + 1:
             self._q_network.train(True)
             for _ in range(int(new_experiences / STEP_PER_UPDATE)):
-                mini_batch = random.sample(experiences, MINI_BATCH_SIZE)
+                sample = random.sample(range(len(experiences) - 1), MINI_BATCH_SIZE)
+                mini_batch = [experiences[i] for i in sample]
                 states = torch.from_numpy(np.array([e.state for e in mini_batch])).float().to(device)
                 actions = torch.from_numpy(np.array([e.action for e in mini_batch])).long().to(device)
                 rewards = torch.from_numpy(np.array([e.reward for e in mini_batch])).float().to(device)
                 new_states = torch.from_numpy(np.array([e.new_state for e in mini_batch])).float().to(device)
                 dones = torch.from_numpy(np.array([e.done for e in mini_batch])).float().to(device)
-
+ 
                 q_values = self._q_network(states).gather(1, actions.unsqueeze(1)).squeeze(1)
-                next_q_values = self._target_q_network(new_states).max(1)[0]
+                if self._sarsa:
+                    new_actions = torch.from_numpy(np.array([e.extra for e in mini_batch])).long().to(device)
+                    next_q_values = self._target_q_network(new_states).gather(1, new_actions.unsqueeze(1)).squeeze(1)
+                else:
+                    next_q_values = self._target_q_network(new_states).max(1)[0]
                 expected_q_values = rewards + (self._gamma * next_q_values * (1 - dones))
 
                 loss = F.mse_loss(q_values, expected_q_values.detach())
@@ -133,6 +156,7 @@ class DQNAgent(Agent):
         }
         state['hp']['epsilon'] = self._epsilon
         state['hp']['total_updates'] = self._total_updates
+        state['hp']['sarsa'] = self._sarsa
         if self._optimizer:
             state['optimizer'] = self._optimizer.state_dict()
         return state
@@ -172,8 +196,9 @@ def create_agent(env: gym.Env, args: List[str]) -> Agent:
         hp['tau'] = min(max(0.0, parsed_args.tau), 1.0)
     if parsed_args.epsilon_decay:
         hp['epsilon_decay'] = min(max(0.0, parsed_args.epsilon_decay), 1.0)
+    hp['sarsa'] = __name__ == 'SARSA'
 
-    print(f"Creating DeepQNetwork for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
+    print(f"Creating {__name__} for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
     
     return DQNAgent(s_size, a_size, hp['layers'], hp=hp)
 
@@ -187,7 +212,7 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     agent = DQNAgent(s_size, a_size, hp['layers'], hp=hp)
     agent.load_state_dict(state)
     
-    print(f"Loading DeepQNetwork for {envId} with layers: {hp['layers']}, gamma: {agent._gamma}, lr: {hp['lr']}, tau: {agent._tau}, epsilon_decay: {agent._epsilon_decay}, epsilon: {agent._epsilon}, total_updates: {agent._total_updates}")
+    print(f"Loading {__name__} for {envId} with layers: {hp['layers']}, gamma: {agent._gamma}, lr: {hp['lr']}, tau: {agent._tau}, epsilon_decay: {agent._epsilon_decay}, epsilon: {agent._epsilon}, total_updates: {agent._total_updates}")
 
     return agent
 
