@@ -1,3 +1,3 @@
 #! /usr/bin/env bash
 
-python -Wi::DeprecationWarning play_test.py
+python -Wi::DeprecationWarning play_test.py $@

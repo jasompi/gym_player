@@ -2,12 +2,14 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import unittest
 
+import gymnasium as gym
 import io
 import os
 import play
 import re
 import sys
 import tempfile
+import torch
 
 class TestPlayMain(unittest.TestCase):
     def run_main(self, argv) -> str:
@@ -112,6 +114,23 @@ class TestPlayMain(unittest.TestCase):
         
         with tempfile.TemporaryDirectory() as tmpdir:
             self.run_test(env_id, policy, tmpdir)
+    
+    def test_PolicyGradient_compute_returns(self):
+        env_id = 'CartPole-v1'
+        import PolicyGradient
+        rewards = []
+        env = gym.make(env_id)
+        state, _ = env.reset()
+        for i in range(env.spec.max_episode_steps):
+            new_state, reward, done, truncated, _ = env.step(env.action_space.sample())
+            rewards.append(reward)
+            if done or truncated:
+                env.reset()
+                break
+        agent = PolicyGradient.create_agent(env, [])
+        returns = agent._compute_returns(rewards)
+        returns1 = agent._compute_returns_vec(rewards)
+        self.assertTrue(torch.equal(returns, returns1))
 
 if __name__ == '__main__':
     unittest.main()

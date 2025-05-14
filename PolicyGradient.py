@@ -41,75 +41,109 @@ hyperparameters = {
     },
     'LunarLander':  {
         'layers': [8],
-        'gamma': 0.99,
+        'gamma': 0.995,
         'lr': 0.01,
         'prep': LunarLander_preprocess_experiences,
     },
 }
 
-class PolicyGradientAgent(nn.Module, Agent):
-    def __init__(self, s_size: int, a_size: int, h_sizes: List[int], hp : Dict[str, Any]={}):
-        super(PolicyGradientAgent, self).__init__()
-        self._layers = nn.ModuleList([nn.Linear(*lu) for lu in zip([s_size] + h_sizes, h_sizes + [a_size])])
-        self._optimizer = None
-        self._hp = hp
-        self._gamma = hp['gamma']
-        self = self.to(device)
-        logging.debug(f'layers: {self._layers}')
 
+class Actor(nn.Module):
+    def __init__(self, s_size: int, a_size: int, h_sizes: List[int]):
+        super(Actor, self).__init__()
+        self._layers = nn.ModuleList([nn.Linear(*lu) for lu in zip([s_size] + h_sizes, h_sizes + [a_size])])
+        logging.debug(f'layers: {self._layers}')
+    
     def forward(self, x: torch.Tensor):
         for layer in self._layers[:-1]:
             x = F.relu(layer(x))
         x = self._layers[-1](x)
         return F.softmax(x, dim=1)
 
+    
+class PolicyGradientAgent(Agent):
+    def __init__(self, s_size: int, a_size: int, h_sizes: List[int], hp : Dict[str, Any]={}):
+        super(PolicyGradientAgent, self).__init__()
+        self._actor = Actor(s_size, a_size, h_sizes).to(device)
+        self._actor_optimizer = None
+        self._hp = hp
+        self._gamma = hp['gamma']
+ 
+    def train(self, train: bool):
+        return self._actor.train(train)
+    
     def act(self, state: np.ndarray) -> Tuple[torch_types.Number, Optional[torch.Tensor]]:
         t_state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        probs = self.forward(t_state).cpu()
+        probs = self._actor(t_state).cpu()
         m = dist.Categorical(probs)
         action = m.sample()
         return action.item(), m.log_prob(action)
+    
+    def _compute_returns_vec(self, rewards: List[float]) -> torch.Tensor:
+        n_step = len(rewards)
+        gamma = torch.tensor(self._gamma, device=device)
+        t_rewards = torch.tensor(rewards, dtype=torch.float32, device=device)
+        mask = torch.ones((n_step, n_step), device=device).triu()
+        power = torch.arange(n_step, device=device)
+        return (torch.pow(gamma, mask * power - power.unsqueeze(1)) * mask * t_rewards).sum(dim=1)
+    
+    def _compute_returns(self, rewards) -> torch.Tensor:
+        n_step = len(rewards)
+        returns = collections.deque(maxlen=n_step)
+        for t in reversed(range(n_step)):
+            disc_return_t = (returns[0] if len(returns) > 0 else 0)
+            returns.appendleft( self._gamma * disc_return_t + rewards[t] )
+        t_returns = torch.tensor(returns, dtype=torch.float32, device=device)
+        logging.info(F'returns:\n{t_returns}')
+        return t_returns
+        
+    def _compute_advantage(self, returns: torch.Tensor) -> torch.Tensor:
+        eps = np.finfo(np.float32).eps.item()
+        advantages = (returns - returns.mean()) / (returns.std() + eps)
+        logging.info(F'advantages:\n{advantages}')
+        return advantages
 
     def reinforce(self, experiences: collections.deque[Experience], new_experience: int):
-        if not self._optimizer:
-            self._optimizer = optim.Adam(self.parameters(), lr=self._hp['lr'])
+        if not self._actor_optimizer:
+            self._actor_optimizer = optim.Adam(self._actor.parameters(), lr=self._hp['lr'])
 
         if self._hp['prep']:
             experiences = self._hp['prep'](experiences)
         
-        n_step = len(experiences)
-        returns = collections.deque(maxlen=n_step)
         rewards = [e.reward for e in experiences]
-        log_probs = [e.extra.to(device) for e in experiences if e.extra is not None]
+
+        returns = self._compute_returns(rewards)
+
+        advantages = self._compute_advantage(returns)
         
-        for t in reversed(range(n_step)):
-            disc_return_t = (returns[0] if len(returns) > 0 else 0)
-            returns.appendleft( self._gamma * disc_return_t + rewards[t] )
+        log_probs = torch.stack([e.extra for e in experiences if torch.is_tensor(e.extra)]).squeeze(1).to(device)
+        logging.info(F'log_probs:\n{log_probs}')
         
-        eps = np.finfo(np.float32).eps.item()
+        policy_loss = (- log_probs * advantages).sum()
+        logging.info(f'policy_loss: {policy_loss}')
         
-        returns = torch.tensor(returns, dtype=torch.float32, device=device)
-        returns = (returns - returns.mean()) / (returns.std() + eps)
-        
-        policy_loss = []
-        for (log_prob, disc_return) in zip(log_probs, returns):
-            policy_loss.append(-log_prob * disc_return) # type: ignore
-        policy_loss = torch.cat(policy_loss).sum()
-        
-        self._optimizer.zero_grad()
+        self._actor_optimizer.zero_grad()
         policy_loss.backward()
-        self._optimizer.step()
+        self._actor_optimizer.step()
         experiences.clear()
     
     def get_state_dict(self) -> Dict[str, Any]:
         state = {
-            'model': {key: value.cpu() for key, value in self.state_dict().items()},
+            'model': {key: value.cpu() for key, value in self._actor.state_dict().items()},
             'hp': self._hp.copy(),
         }
         del state['hp']['prep']
-        if self._optimizer:
-            state['optimizer'] = self._optimizer.state_dict()
+        if self._actor_optimizer:
+            state['optimizer'] = self._actor_optimizer.state_dict()
         return state
+    
+    def load_state_dict(self, state: Dict[str, Any]):
+        self._actor.load_state_dict(state['model'])
+        self._actor.to(device)
+        if 'optimizer' in state:
+            self._actor_optimizer = optim.Adam(self._actor.parameters(), lr=self._hp['lr'])
+            self._actor_optimizer.load_state_dict(state['optimizer'])
+
 
 def create_agent(env: gym.Env, args: List[str]) -> Agent:
     parser = argparse.ArgumentParser()
@@ -142,12 +176,7 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     hp = hyperparameters.get(envId.split('-')[0], hyperparameters['default']) | state.get('hp', {})
     
     agent = PolicyGradientAgent(s_size, a_size, hp['layers'], hp=hp)
-    agent.load_state_dict(state['model'])
-    agent = agent.to(device)
-    if 'optimizer' in state:
-        agent._optimizer = optim.Adam(agent.parameters(), lr=hp['lr'])
-        agent._optimizer.load_state_dict(state['optimizer'])
-    
+    agent.load_state_dict(state)
     print(f"Loading PolicyGradient for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
 
     return agent

@@ -92,10 +92,6 @@ class DQNAgent(Agent):
     def train(self, train: bool):
         self._train = train
     
-    @property
-    def name(self) -> str:
-        return 'SARSA' if self._sarsa else super().name
- 
     def act(self, state: np.ndarray) -> Tuple[torch_types.Number, Optional[torch.Tensor]]:
         if self._train and np.random.rand() <= self._epsilon:
             return np.random.choice(self._a_size), None
