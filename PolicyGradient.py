@@ -10,11 +10,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.types as torch_types
-from typing import List, Dict, Tuple, Any, Optional
+from typing import Dict, List, MutableSequence, Sequence, Tuple, Any, Optional
+
+eps = np.finfo(np.float32).eps.item()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-def LunarLander_preprocess_experiences(experiences: List[Experience]) -> List[Experience]:
+def mean_variance(means: Sequence[float], variances: Sequence[float], n_samples: Sequence[int]):
+    n_sample = np.sum(n_samples)
+    mean = np.sum(np.array(means) * np.array(n_samples)) / n_sample
+    variance = np.sum((np.array(variances)  + np.square(np.array(means) - mean)) * np.array(n_samples)) / n_sample
+    return mean, variance, n_sample
+
+def LunarLander_preprocess_experiences(experiences: MutableSequence[Experience]) -> MutableSequence[Experience]:
     # Preprocess the experience for LunarLander
     # Increase the reward for action 0 (noop) if the lander is in a good position
     total_reward = 0
@@ -41,12 +49,11 @@ hyperparameters = {
     },
     'LunarLander':  {
         'layers': [8],
-        'gamma': 0.995,
+        'gamma': 0.99,
         'lr': 0.01,
         'prep': LunarLander_preprocess_experiences,
     },
 }
-
 
 class Actor(nn.Module):
     def __init__(self, s_size: int, a_size: int, h_sizes: List[int]):
@@ -62,13 +69,16 @@ class Actor(nn.Module):
 
     
 class PolicyGradientAgent(Agent):
-    def __init__(self, s_size: int, a_size: int, h_sizes: List[int], hp : Dict[str, Any]={}):
+    def __init__(self, s_size: int, a_size: int, hp : Dict[str, Any]={}):
         super(PolicyGradientAgent, self).__init__()
-        self._actor = Actor(s_size, a_size, h_sizes).to(device)
+        self._actor = Actor(s_size, a_size, hp['layers']).to(device)
         self._actor_optimizer = None
         self._hp = hp
         self._gamma = hp['gamma']
- 
+        self._mean = hp.get('mean', 0)
+        self._variance = hp.get('variance', 0)
+        self._n_sample = hp.get('nSample', 0)
+
     def train(self, train: bool):
         return self._actor.train(train)
     
@@ -79,42 +89,56 @@ class PolicyGradientAgent(Agent):
         action = m.sample()
         return action.item(), m.log_prob(action)
     
-    def _compute_returns_vec(self, rewards: List[float]) -> torch.Tensor:
+    def _compute_returns_vec(self, experiences: Sequence[Experience]) -> torch.Tensor:
+        rewards = [e.reward for e in experiences]
         n_step = len(rewards)
         gamma = torch.tensor(self._gamma, device=device)
         t_rewards = torch.tensor(rewards, dtype=torch.float32, device=device)
         mask = torch.ones((n_step, n_step), device=device).triu()
         power = torch.arange(n_step, device=device)
-        return (torch.pow(gamma, mask * power - power.unsqueeze(1)) * mask * t_rewards).sum(dim=1)
+        t_returns = (torch.pow(gamma, mask * power - power.unsqueeze(1)) * mask * t_rewards).sum(dim=1)
+        mean = self._mean
+        std = np.sqrt(self._variance)
+        t_returns = (t_returns - mean) / (std + eps)
+        return t_returns
     
-    def _compute_returns(self, rewards) -> torch.Tensor:
+    def compute_returns(self, experiences: Sequence[Experience], next_return: float=0.0) -> torch.Tensor:
+        rewards = [e.reward for e in experiences]
+        dones = [e.done for e in experiences]
         n_step = len(rewards)
         returns = collections.deque(maxlen=n_step)
+        disc_return = next_return
         for t in reversed(range(n_step)):
-            disc_return_t = (returns[0] if len(returns) > 0 else 0)
-            returns.appendleft( self._gamma * disc_return_t + rewards[t] )
+            disc_return = self._gamma * disc_return * (1 - dones[t]) + rewards[t]
+            returns.appendleft( disc_return )
         t_returns = torch.tensor(returns, dtype=torch.float32, device=device)
+        self._mean, self._variance, self._n_sample = mean_variance([self._mean, t_returns.mean().item()], [self._variance, t_returns.var().item()], [self._n_sample, n_step])
+        
+        mean = self._mean
+        std = np.sqrt(self._variance)
+        t_returns = (t_returns - mean) / (std + eps)
         logging.info(F'returns:\n{t_returns}')
         return t_returns
         
-    def _compute_advantage(self, returns: torch.Tensor) -> torch.Tensor:
-        eps = np.finfo(np.float32).eps.item()
-        advantages = (returns - returns.mean()) / (returns.std() + eps)
+    def compute_advantage(self, returns: torch.Tensor, experiences: Sequence[Experience]) -> torch.Tensor:
+        advantages = returns - 0
         logging.info(F'advantages:\n{advantages}')
         return advantages
 
-    def reinforce(self, experiences: collections.deque[Experience], new_experience: int):
+    def next_return(self, next_state: np.ndarray, next_action: torch_types.Number|None = None) -> float:
+        return 0.0
+    
+    def reinforce(self, experiences: MutableSequence[Experience], new_experience: int):
         if not self._actor_optimizer:
             self._actor_optimizer = optim.Adam(self._actor.parameters(), lr=self._hp['lr'])
 
         if self._hp['prep']:
             experiences = self._hp['prep'](experiences)
         
-        rewards = [e.reward for e in experiences]
+        _, _, _, new_state, done, _ = experiences[-1]
+        returns = self.compute_returns(experiences, 0 if done else self.next_return(new_state))
 
-        returns = self._compute_returns(rewards)
-
-        advantages = self._compute_advantage(returns)
+        advantages = self.compute_advantage(returns, experiences)
         
         log_probs = torch.stack([e.extra for e in experiences if torch.is_tensor(e.extra)]).squeeze(1).to(device)
         logging.info(F'log_probs:\n{log_probs}')
@@ -133,6 +157,11 @@ class PolicyGradientAgent(Agent):
             'hp': self._hp.copy(),
         }
         del state['hp']['prep']
+        state['hp'].update({
+            'mean': self._mean,
+            'variance': self._variance,
+            'n_sample': self._n_sample
+        })
         if self._actor_optimizer:
             state['optimizer'] = self._actor_optimizer.state_dict()
         return state
@@ -147,7 +176,7 @@ class PolicyGradientAgent(Agent):
 
 def create_agent(env: gym.Env, args: List[str]) -> Agent:
     parser = argparse.ArgumentParser()
-    parser.add_argument('-l', '--layers', type=int, nargs='*', help='an integer for the accumulator')
+    parser.add_argument('-l', '--layers', type=int, nargs='*', help='number of unit for hidden layers')
     parser.add_argument('--lr', type=float, help='learning rate')
     parser.add_argument('--gamma', help='discount rate for reward')
     parsed_args = parser.parse_args(args)
@@ -163,10 +192,10 @@ def create_agent(env: gym.Env, args: List[str]) -> Agent:
         hp['lr'] = parsed_args.lr
     if parsed_args.gamma:
         hp['gamma'] = parsed_args.gamma
-
+    logging.debug(f'hp: {hp}')
     print(f"Creating PolicyGradient for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
     
-    return PolicyGradientAgent(s_size, a_size, hp['layers'], hp=hp)
+    return PolicyGradientAgent(s_size, a_size, hp=hp)
 
 def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     envId = env.spec.id # type: ignore
@@ -174,8 +203,8 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     a_size = env.action_space.n # type: ignore
 
     hp = hyperparameters.get(envId.split('-')[0], hyperparameters['default']) | state.get('hp', {})
-    
-    agent = PolicyGradientAgent(s_size, a_size, hp['layers'], hp=hp)
+    logging.debug(f'hp: {hp}')
+    agent = PolicyGradientAgent(s_size, a_size, hp=hp)
     agent.load_state_dict(state)
     print(f"Loading PolicyGradient for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
 

@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.types as torch_types
-from typing import List, Dict, Tuple, Any, Optional
+from typing import Dict, List, MutableSequence, Sequence, Tuple, Any, Optional
 
 MINI_BATCH_SIZE = 32
 STEP_PER_UPDATE = 4
@@ -19,7 +19,7 @@ UPDATES_PER_EPSILON_DECAY = 1000
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-def SARSA_preprocess_experiences(experiences: List[Experience]) -> List[Experience]:
+def SARSA_preprocess_experiences(experiences: MutableSequence[Experience]) -> MutableSequence[Experience]:
     for i in reversed(range(len(experiences)  - 1)):
         state, action, reward, new_state, done, new_action = experiences[i]
         if new_action is not None:
@@ -69,8 +69,9 @@ class DeepQNetwork(nn.Module):
 
 
 class DQNAgent(Agent):
-    def __init__(self, s_size: int, a_size: int, h_sizes: List[int], hp : Dict[str, Any]={}):
+    def __init__(self, s_size: int, a_size: int, hp : Dict[str, Any]={}):
         super().__init__()
+        h_sizes = hp['layers']
         self._q_network = DeepQNetwork(s_size, a_size, h_sizes).to(device)
         self._q_network.train(False)
         self._target_q_network = DeepQNetwork(s_size, a_size, h_sizes)
@@ -105,7 +106,7 @@ class DQNAgent(Agent):
         for target_param, param in zip(self._target_q_network.parameters(), self._q_network.parameters()):
             target_param.data.copy_(tau * param.data + (1.0 - tau) * target_param.data)
  
-    def reinforce(self, experiences: List[Experience], new_experiences: int):
+    def reinforce(self, experiences: MutableSequence[Experience], new_experiences: int):
         if not self._optimizer:
             self._optimizer = optim.Adam(self._q_network.parameters(), lr=self._hp['lr'])
 
@@ -170,7 +171,7 @@ class DQNAgent(Agent):
 
 def create_agent(env: gym.Env, args: List[str]) -> Agent:
     parser = argparse.ArgumentParser()
-    parser.add_argument('-l', '--layers', type=int, nargs='*', help='an integer for the accumulator')
+    parser.add_argument('-l', '--layers', type=int, nargs='*', help='number of unit for hidden layers')
     parser.add_argument('--lr', type=float, help='learning rate')
     parser.add_argument('--gamma', type=float, help='discount rate for reward')
     parser.add_argument('--tau', type=float, help='soft update rate. Use 0 for hard update')
@@ -196,7 +197,7 @@ def create_agent(env: gym.Env, args: List[str]) -> Agent:
 
     print(f"Creating {__name__} for {envId} with layers: {hp['layers']}, gamma: {hp['gamma']}, lr: {hp['lr']}")
     
-    return DQNAgent(s_size, a_size, hp['layers'], hp=hp)
+    return DQNAgent(s_size, a_size, hp=hp)
 
 def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     envId = env.spec.id # type: ignore
@@ -205,7 +206,7 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
 
     hp = hyperparameters.get(envId.split('-')[0], hyperparameters['default']) | state.get('hp', {})
     
-    agent = DQNAgent(s_size, a_size, hp['layers'], hp=hp)
+    agent = DQNAgent(s_size, a_size, hp=hp)
     agent.load_state_dict(state)
     
     print(f"Loading {__name__} for {envId} with layers: {hp['layers']}, gamma: {agent._gamma}, lr: {hp['lr']}, tau: {agent._tau}, epsilon_decay: {agent._epsilon_decay}, epsilon: {agent._epsilon}, total_updates: {agent._total_updates}")
@@ -213,4 +214,4 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     return agent
 
 if __name__ == "__main__":
-    create_agent(None, ['-h'])
+    create_agent(None, ['-h']) # type: ignore

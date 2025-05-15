@@ -3,7 +3,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 import torch.types as torch_types
-from typing import List, Dict, NamedTuple, Tuple, Any, Optional
+from typing import Dict, MutableSequence, NamedTuple, Tuple, Any, Optional
 
 class Experience(NamedTuple):
     """Experience tuple for reinforcement learning.
@@ -44,7 +44,7 @@ class Agent:
         """
         return 0, None
     
-    def reinforce(self, experiences: collections.deque[Experience], new_experience: int):
+    def reinforce(self, experiences: MutableSequence[Experience], new_experience: int):
         """Perform reinforcement learning update.
         Args:
             experiences (collections.deque[Experience]): A deque of experiences to update the agent.
