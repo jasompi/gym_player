@@ -14,6 +14,15 @@ import tempfile
 import torch
 import PolicyGradient
 
+def compute_returns_vec(rewards: torch.Tensor, done: bool, next_value: float, gamma: float = 1.0) -> torch.Tensor:
+    n_step = len(rewards)
+    if not done:
+        rewards[-1] += next_value * gamma
+    mask = torch.ones((n_step, n_step)).triu()
+    power = torch.arange(n_step)
+    t_returns = (torch.pow(gamma, mask * power - power.unsqueeze(1)) * mask * rewards).sum(dim=1)
+    return t_returns
+
 class TestPlayMain(unittest.TestCase):
     def run_main(self, argv) -> str:
         # print(' '.join(argv))
@@ -135,21 +144,51 @@ class TestPlayMain(unittest.TestCase):
     
     def test_PolicyGradient_compute_returns(self):
         env_id = 'CartPole-v1'
-        experience = []
         env = gym.make(env_id)
-        state, _ = env.reset()
-        for i in range(env.spec.max_episode_steps):
-            action = env.action_space.sample()
-            new_state, reward, done, truncated, _ = env.step(action)
-            experience.append(Experience(state, action, reward, new_state, done, None))
-            if done or truncated:
-                env.reset()
-                break
-        agent: PolicyGradient.PolicyGradientAgent = PolicyGradient.create_agent(env, [])
-        returns = agent.compute_returns(experience)
-        returns1 = agent._compute_returns_vec(experience)
-        self.assertTrue(torch.equal(returns, returns1))
+        _, _ = env.reset()
+        n_steps = 10
+        
+        rewards = torch.ones((3, n_steps), dtype=torch.float32)
+        dones = torch.zeros((3, n_steps), dtype=torch.long)
+        truncates = torch.zeros((3, n_steps), dtype=torch.long)
+        next_values = torch.ones((3, n_steps), dtype=torch.float32) * 0.5
+        dones[0, -1] = 1
+        truncates[1, -1] = 1
+        
+        agent: PolicyGradient.PolicyGradientAgent = PolicyGradient.create_agent(env, []) # type: ignore
+        returns = agent.compute_returns(rewards, dones, truncates, next_values)
+        
+        expected_returns_0 = torch.arange(n_steps, 0, -1, dtype=torch.float32).unsqueeze(0)
+        expected_returns_1 = expected_returns_0 + 0.5
+        expected_returns = torch.cat((expected_returns_0, expected_returns_1, expected_returns_1), dim=0)
+        self.assertTrue(torch.equal(returns, expected_returns))
 
+        rewards2= torch.cat((rewards, rewards), dim=1)
+        dones2= torch.cat((dones, dones), dim=1)
+        truncates2= torch.cat((truncates, truncates), dim=1)
+        next_values2= torch.cat((next_values, next_values), dim=1)
+        returns2 = agent.compute_returns(rewards2, dones2, truncates2, next_values2)
+        
+        expected_returns_0_2 = torch.cat((expected_returns_0, expected_returns_0), dim=1)
+        expected_returns_1_2 = torch.cat((expected_returns_1, expected_returns_1), dim=1)
+        expected_returns_2_2 = torch.arange(n_steps * 2, 0, -1, dtype=torch.float32).unsqueeze(0) + 0.5
+        expected_returns2 = torch.cat((expected_returns_0_2, expected_returns_1_2, expected_returns_2_2), dim=0)
+        self.assertTrue(torch.equal(returns2, expected_returns2))
+        
+        agent._gamma = 0.9
+        returns = agent.compute_returns(rewards, dones, truncates, next_values)
+        expected_returns_0 = compute_returns_vec(rewards[0], True, 0.5, agent._gamma)
+        expected_returns_1 = compute_returns_vec(rewards[1], False, 0.5, agent._gamma)
+        expected_returns = torch.stack((expected_returns_0, expected_returns_1, expected_returns_1))
+        self.assertTrue(torch.allclose(returns, expected_returns))
+
+        returns2 = agent.compute_returns(rewards2, dones2, truncates2, next_values2)
+        expected_returns_0_2 = torch.cat((expected_returns_0, expected_returns_0), dim=0)
+        expected_returns_1_2 = torch.cat((expected_returns_1, expected_returns_1), dim=0)
+        expected_returns_2_2 = compute_returns_vec(rewards2[2], False, 0.5, agent._gamma)
+        expected_returns2 = torch.stack((expected_returns_0_2, expected_returns_1_2, expected_returns_2_2), dim=0)
+        self.assertTrue(torch.allclose(returns2, expected_returns2))
+        
     def test_PolicyGradient_mean_variance(self):
         n_samples = np.random.randint(1, 10, 5).tolist()
         samples = [np.random.random_sample(n) for n in n_samples]

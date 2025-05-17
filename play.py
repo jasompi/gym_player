@@ -35,6 +35,8 @@ def play_episode(env,
     agent.train(experiences is not None)
 
     state, _ = env.reset()
+    state = torch.from_numpy(state).float()
+    action = agent.act(state)
     if frame_buffer is not None:
         frame_buffer.append(env.render())
 
@@ -42,18 +44,20 @@ def play_episode(env,
     done = False
     for i in range(env.spec.max_episode_steps):
         # this is where you would insert your policy
-        action, extra = agent.act(state)
 
         # step (transition) through the environment with the action
         # receiving the next observation, reward and if the episode has terminated or truncated
-        new_state, reward, done, truncated, _ = env.step(action)
+        next_state, reward, done, truncated, _ = env.step(action.action.item())
+        next_state = torch.from_numpy(next_state).float()
+        next_action = agent.act(next_state)
         if frame_buffer is not None:
             frame_buffer.append(env.render())
         total_reward += reward
         if experiences is not None:
-            experiences.append(Experience(state, action, reward, new_state, done, extra))
-        logging.debug(f'{env.spec.id} Episode: {episode}:{i}; action: {action}; reward: {reward}; total_reward: {total_reward}; state: {state}; done: {done}; truncated: {truncated}')
-        state = new_state
+            experiences.append(Experience(state, action.action, reward, done, truncated, next_state, next_action.action, action.log_prob, action.value, next_action.value if not done else torch.tensor(0, dtype=torch.float32)))
+        logging.debug(f'{env.spec.id} Episode: {episode}:{i}; action: {action.action}; reward: {reward}; total_reward: {total_reward}; state: {state}; done: {done}; truncated: {truncated}, log_prob: {action.log_prob}; value: {action.value}')
+        state = next_state
+        action = next_action
 
         # If the episode has ended then we can reset to start a new episode
         if done or truncated:

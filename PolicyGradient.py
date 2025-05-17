@@ -1,4 +1,4 @@
-from agent import Agent, Experience
+from agent import Action, Agent, Experience
 import argparse
 import collections
 import gymnasium as gym
@@ -27,11 +27,10 @@ def LunarLander_preprocess_experiences(experiences: MutableSequence[Experience])
     # Increase the reward for action 0 (noop) if the lander is in a good position
     total_reward = 0
     for i in range(len(experiences)):
-        state, action, reward, new_state, done, log_prob = experiences[i]
-        total_reward += reward
-        if abs(state[0]) < 0.1 and abs(state[1]) < 0.01 and abs(state[3]) < 0.1 and total_reward > 150 and action == 0 and reward > 0:
-            reward *= 2
-        experiences[i] = Experience(state, action, reward, new_state, done, log_prob)
+        ex = experiences[i]
+        total_reward += ex.reward
+        if abs(ex.state[0]) < 0.1 and abs(ex.state[1]) < 0.01 and abs(ex.state[3]) < 0.1 and total_reward > 150 and ex.action == 0 and ex.reward > 0:
+            experiences[i] = Experience(ex.state, ex.action, ex.reward * 2, ex.done, ex.truncated, ex.next_state, ex.next_action, ex.log_prob, ex.value, ex.next_value)
     return experiences
 
 hyperparameters = {
@@ -82,12 +81,12 @@ class PolicyGradientAgent(Agent):
     def train(self, train: bool):
         return self._actor.train(train)
     
-    def act(self, state: np.ndarray) -> Tuple[torch_types.Number, Optional[torch.Tensor]]:
-        t_state = torch.from_numpy(state).float().unsqueeze(0).to(device)
+    def act(self, state: torch.Tensor) -> Action:
+        t_state = state.unsqueeze(0).to(device)
         probs = self._actor(t_state).cpu()
         m = dist.Categorical(probs)
         action = m.sample()
-        return action.item(), m.log_prob(action)
+        return Action(action, m.log_prob(action), torch.tensor(0, dtype=torch.float32))
     
     def _compute_returns_vec(self, experiences: Sequence[Experience]) -> torch.Tensor:
         rewards = [e.reward for e in experiences]
@@ -102,46 +101,61 @@ class PolicyGradientAgent(Agent):
         t_returns = (t_returns - mean) / (std + eps)
         return t_returns
     
-    def compute_returns(self, experiences: Sequence[Experience], next_return: float=0.0) -> torch.Tensor:
-        rewards = [e.reward for e in experiences]
-        dones = [e.done for e in experiences]
-        n_step = len(rewards)
-        returns = collections.deque(maxlen=n_step)
-        disc_return = next_return
+    def compute_returns(self, rewards: torch.Tensor, dones: torch.Tensor, truncates: torch.Tensor, next_values: torch.Tensor) -> torch.Tensor:
+        assert rewards.shape == dones.shape
+        assert rewards.shape == truncates.shape
+        assert rewards.shape == next_values.shape
+
+        n_step = rewards.shape[1]
+        returns = torch.empty([rewards.shape[0], 0], dtype=torch.float32, device=device)
+        disc_returns = next_values[:, -1]
         for t in reversed(range(n_step)):
-            disc_return = self._gamma * disc_return * (1 - dones[t]) + rewards[t]
-            returns.appendleft( disc_return )
-        t_returns = torch.tensor(returns, dtype=torch.float32, device=device)
-        self._mean, self._variance, self._n_sample = mean_variance([self._mean, t_returns.mean().item()], [self._variance, t_returns.var().item()], [self._n_sample, n_step])
+            disc_returns = (self._gamma * (1 - dones[:,t]) * ((1 - truncates[:, t]) * disc_returns + truncates[:, t] * next_values[:, t]) + rewards[:,t])
+            returns = torch.cat((disc_returns.unsqueeze(1), returns), dim=1)
+            
+        logging.info(F'returns:\n{returns}')
+        return returns
+
+    def normalize_return(self, returns: torch.Tensor) -> torch.Tensor:
+        self._mean, self._variance, self._n_sample = mean_variance([self._mean, returns.mean().item()], [self._variance, returns.var().item()], [self._n_sample, returns.numel()])
         
         mean = self._mean
         std = np.sqrt(self._variance)
-        t_returns = (t_returns - mean) / (std + eps)
-        logging.info(F'returns:\n{t_returns}')
-        return t_returns
+        returns = (returns - mean) / (std + eps)
+        logging.info(F'returns:\n{returns}')
+        return returns
         
-    def compute_advantage(self, returns: torch.Tensor, experiences: Sequence[Experience]) -> torch.Tensor:
-        advantages = returns - 0
-        logging.info(F'advantages:\n{advantages}')
+    def compute_advantage(self, returns: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
+        advantages = returns - 0.0
+        logging.info(F'advantages:\n{advantages}, advantages.shape: {advantages.shape}')
         return advantages
-
-    def next_return(self, next_state: np.ndarray, next_action: torch_types.Number|None = None) -> float:
-        return 0.0
     
-    def reinforce(self, experiences: MutableSequence[Experience], new_experience: int):
+    def reinforce_actor(self, experiences: Sequence[Sequence[Experience]]):
         if not self._actor_optimizer:
             self._actor_optimizer = optim.Adam(self._actor.parameters(), lr=self._hp['lr'])
 
-        if self._hp['prep']:
-            experiences = self._hp['prep'](experiences)
+        # Unzip experiences into separate components using list comprehension
+        rewards = torch.tensor([[exp.reward for exp in traj] for traj in experiences]).float().to(device)
+        dones = torch.tensor([[exp.done for exp in traj] for traj in experiences]).long().to(device)
+        truncates = torch.tensor([[exp.truncated for exp in traj] for traj in experiences]).long().to(device)
+        log_probs = torch.stack([torch.stack([exp.log_prob for exp in traj if exp.log_prob is not None]) for traj in experiences]).squeeze(2).to(device)
+        values = torch.stack([torch.stack([exp.value for exp in traj if exp.value is not None]) for traj in experiences]).to(device)
+        next_values = torch.stack([torch.stack([exp.next_value for exp in traj if exp.next_value is not None]) for traj in experiences]).to(device)
+        logging.info(F'log_probs:\n{log_probs}, log_probs.shape: {log_probs.shape}')
+        logging.info(F'rewards:\n{rewards}, rewards.shape: {rewards.shape}')
+        logging.info(F'dones:\n{dones}, dones.shape: {dones.shape}')
+        logging.info(F'truncates:\n{truncates}, truncates.shape: {truncates.shape}')
+        logging.info(F'values:\n{values}, values.shape: {values.shape}')
+        logging.info(F'next_values:\n{next_values}, next_values.shape: {next_values.shape}')
         
-        _, _, _, new_state, done, _ = experiences[-1]
-        returns = self.compute_returns(experiences, 0 if done else self.next_return(new_state))
+        # Compute returns
+        returns = self.compute_returns(rewards, dones, truncates, next_values)
+        
+        normlized_returns = self.normalize_return(returns)
 
-        advantages = self.compute_advantage(returns, experiences)
+        advantages = self.compute_advantage(normlized_returns, values)
         
-        log_probs = torch.stack([e.extra for e in experiences if torch.is_tensor(e.extra)]).squeeze(1).to(device)
-        logging.info(F'log_probs:\n{log_probs}')
+        logging.info(F'log_probs:\n{log_probs}, log_probs.shape: {log_probs.shape}')
         
         policy_loss = (- log_probs * advantages).sum()
         logging.info(f'policy_loss: {policy_loss}')
@@ -149,6 +163,12 @@ class PolicyGradientAgent(Agent):
         self._actor_optimizer.zero_grad()
         policy_loss.backward()
         self._actor_optimizer.step()
+
+    
+    def reinforce(self, experiences: MutableSequence[Experience], new_experience: int):
+        if self._hp['prep']:
+            experiences = self._hp['prep'](experiences)
+        self.reinforce_actor([experiences])
         experiences.clear()
     
     def get_state_dict(self) -> Dict[str, Any]:
@@ -211,4 +231,4 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     return agent
 
 if __name__ == "__main__":
-    create_agent(None, ['-h'])
+    create_agent(None, ['-h']) # type: ignore

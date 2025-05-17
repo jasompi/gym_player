@@ -1,4 +1,4 @@
-from agent import Agent, Experience
+from agent import Action, Agent, Experience
 import argparse
 import collections
 import gymnasium as gym
@@ -18,15 +18,6 @@ STEP_PER_UPDATE = 4
 UPDATES_PER_EPSILON_DECAY = 1000
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-def SARSA_preprocess_experiences(experiences: MutableSequence[Experience]) -> MutableSequence[Experience]:
-    for i in reversed(range(len(experiences)  - 1)):
-        state, action, reward, new_state, done, new_action = experiences[i]
-        if new_action is not None:
-            break
-        new_action = experiences[i + 1].action if not done else 0
-        experiences[i] = Experience(state, action, reward, new_state, done, new_action)
-    return experiences
 
 hyperparameters = {
     'default': {
@@ -93,12 +84,11 @@ class DQNAgent(Agent):
     def train(self, train: bool):
         self._train = train
     
-    def act(self, state: np.ndarray) -> Tuple[torch_types.Number, Optional[torch.Tensor]]:
+    def act(self, state: torch.Tensor) -> Action:
         if self._train and np.random.rand() <= self._epsilon:
-            return np.random.choice(self._a_size), None
-        t_state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        q_values = self._q_network.forward(t_state).cpu().detach().numpy()
-        return np.argmax(q_values).item(), None
+            return Action(torch.tensor(np.random.choice(self._a_size)), None, None)
+        q_values = self._q_network.forward(state.unsqueeze(0).to(device)).cpu().detach()
+        return Action(torch.argmax(q_values), None, None)
 
     def _update_target_network(self, tau: float):
         """Soft update of the target network parameters. If tau == 0, the soft update is not used.
@@ -110,26 +100,23 @@ class DQNAgent(Agent):
         if not self._optimizer:
             self._optimizer = optim.Adam(self._q_network.parameters(), lr=self._hp['lr'])
 
-        if self._sarsa:
-            experiences = SARSA_preprocess_experiences(experiences)
-
         if len(experiences) > MINI_BATCH_SIZE + 1:
             self._q_network.train(True)
             for _ in range(int(new_experiences / STEP_PER_UPDATE)):
                 sample = random.sample(range(len(experiences) - 1), MINI_BATCH_SIZE)
                 mini_batch = [experiences[i] for i in sample]
-                states = torch.from_numpy(np.array([e.state for e in mini_batch])).float().to(device)
-                actions = torch.from_numpy(np.array([e.action for e in mini_batch])).long().to(device)
+                states = torch.stack([e.state for e in mini_batch]).to(device)
+                actions = torch.stack([e.action for e in mini_batch]).long().to(device)
                 rewards = torch.from_numpy(np.array([e.reward for e in mini_batch])).float().to(device)
-                new_states = torch.from_numpy(np.array([e.new_state for e in mini_batch])).float().to(device)
-                dones = torch.from_numpy(np.array([e.done for e in mini_batch])).float().to(device)
+                next_states = torch.stack([e.next_state for e in mini_batch]).to(device)
+                dones = torch.from_numpy(np.array([e.done for e in mini_batch])).long().to(device)
  
                 q_values = self._q_network(states).gather(1, actions.unsqueeze(1)).squeeze(1)
                 if self._sarsa:
-                    new_actions = torch.from_numpy(np.array([e.extra for e in mini_batch])).long().to(device)
-                    next_q_values = self._target_q_network(new_states).gather(1, new_actions.unsqueeze(1)).squeeze(1)
+                    next_actions = torch.stack([e.next_action for e in mini_batch]).long().to(device)
+                    next_q_values = self._target_q_network(next_states).gather(1, next_actions.unsqueeze(1)).squeeze(1)
                 else:
-                    next_q_values = self._target_q_network(new_states).max(1)[0]
+                    next_q_values = self._target_q_network(next_states).max(1)[0]
                 expected_q_values = rewards + (self._gamma * next_q_values * (1 - dones))
 
                 loss = F.mse_loss(q_values, expected_q_values.detach())
@@ -202,7 +189,7 @@ def create_agent(env: gym.Env, args: List[str]) -> Agent:
 def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     envId = env.spec.id # type: ignore
     s_size = env.observation_space.shape[0] # type: ignore
-    a_size = env.action_space.n # type: ignore
+    a_size = env.action_space.shape[0] if env.action_space.shape else env.action_space.n # type: ignore
 
     hp = hyperparameters.get(envId.split('-')[0], hyperparameters['default']) | state.get('hp', {})
     

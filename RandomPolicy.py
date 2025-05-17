@@ -1,5 +1,5 @@
 
-from agent import Agent
+from agent import Agent, Action
 import gymnasium as gym
 import logging
 import numpy as np
@@ -18,15 +18,15 @@ class RandomAgent(Agent):
         super(RandomAgent, self).__init__()
         self._a_size = a_size
  
-    def act(self, state: np.ndarray) -> Tuple[torch_types.Number, Optional[torch.Tensor]]:
+    def act(self, state: torch.Tensor) -> Action:
         """Select an action from the action space base on the current state.
         Args:
-            state (np.ndarray): The current state of the environment.
+            state (torch.Tensor): The current state of the environment.
         Returns:
-            Tuple[torch_types.Number, Any]: A tuple containing the selected action
+            Action: A tuple containing the selected action
             and optional tensor for traning.
         """
-        return random.randint(0, self._a_size - 1), None
+        return Action(torch.tensor(random.randint(0, self._a_size - 1)), None, None)
     
     def get_state_dict(self) -> Dict[str, Any]:
         return {
