@@ -1,0 +1,34 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Run Unit Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "unittest",
+            "args": [
+                "discover",
+                "-s",
+                ".",
+                "-p",
+                "*_test.py"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "play ActorCryticTD",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "play",
+            "args": [
+                "-e=CartPole-v1",
+                "-a=ActorCriticTD",
+                "-v",
+                "-t",
+                "-n=1",
+                "--log=INFO"
+            ],
+            "justMyCode": true
+        }
+    ]
+}
