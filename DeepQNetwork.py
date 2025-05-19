@@ -1,17 +1,14 @@
 from agent import Action, Agent, Experience
 import argparse
-import collections
 import gymnasium as gym
 import logging
 import numpy as np
 import random
 import torch
-import torch.distributions as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import torch.types as torch_types
-from typing import Dict, List, MutableSequence, Sequence, Tuple, Any, Optional
+from typing import Dict, List, MutableSequence, Any
 
 MINI_BATCH_SIZE = 32
 STEP_PER_UPDATE = 4
@@ -100,10 +97,10 @@ class DQNAgent(Agent):
         if not self._optimizer:
             self._optimizer = optim.Adam(self._q_network.parameters(), lr=self._hp['lr'])
 
-        if len(experiences) > MINI_BATCH_SIZE + 1:
+        if len(experiences) >= MINI_BATCH_SIZE:
             self._q_network.train(True)
             for _ in range(int(new_experiences / STEP_PER_UPDATE)):
-                sample = random.sample(range(len(experiences) - 1), MINI_BATCH_SIZE)
+                sample = random.sample(range(len(experiences)), MINI_BATCH_SIZE)
                 mini_batch = [experiences[i] for i in sample]
                 states = torch.stack([e.state for e in mini_batch]).to(device)
                 actions = torch.stack([e.action for e in mini_batch]).long().to(device)

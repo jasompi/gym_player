@@ -13,7 +13,7 @@ import os
 import sys
 import time
 import torch
-from typing import List, Dict, Tuple, Any, Optional
+from typing import List, Tuple, Optional
 
 MAX_EXPERIENCES_SIZE = 100_000
 
@@ -37,6 +37,7 @@ def play_episode(env,
     state, _ = env.reset()
     state = torch.from_numpy(state).float()
     action = agent.act(state)
+    logging.debug(f'action: {action.action}; log_prob: {action.log_prob}; value: {action.value}')
     if frame_buffer is not None:
         frame_buffer.append(env.render())
 
@@ -54,7 +55,8 @@ def play_episode(env,
             frame_buffer.append(env.render())
         total_reward += reward
         if experiences is not None:
-            experiences.append(Experience(state, action.action, reward, done, truncated, next_state, next_action.action, action.log_prob, action.value, next_action.value if not done else torch.tensor(0, dtype=torch.float32)))
+            next_value = next_action.value.clone().detach() if not done and next_action.value is not None else None
+            experiences.append(Experience(state, action.action, reward, done, truncated, next_state, next_action.action, action.log_prob, action.value, next_value))
         logging.debug(f'{env.spec.id} Episode: {episode}:{i}; action: {action.action}; reward: {reward}; total_reward: {total_reward}; state: {state}; done: {done}; truncated: {truncated}, log_prob: {action.log_prob}; value: {action.value}')
         state = next_state
         action = next_action

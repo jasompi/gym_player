@@ -1,6 +1,5 @@
 from agent import Action, Agent, Experience
 import argparse
-import collections
 import gymnasium as gym
 import logging
 import numpy as np
@@ -9,8 +8,7 @@ import torch.distributions as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import torch.types as torch_types
-from typing import Dict, List, MutableSequence, Sequence, Tuple, Any, Optional
+from typing import Dict, List, MutableSequence, Sequence, Any
 
 eps = np.finfo(np.float32).eps.item()
 
@@ -88,19 +86,6 @@ class PolicyGradientAgent(Agent):
         action = m.sample()
         return Action(action, m.log_prob(action), torch.tensor(0, dtype=torch.float32))
     
-    def _compute_returns_vec(self, experiences: Sequence[Experience]) -> torch.Tensor:
-        rewards = [e.reward for e in experiences]
-        n_step = len(rewards)
-        gamma = torch.tensor(self._gamma, device=device)
-        t_rewards = torch.tensor(rewards, dtype=torch.float32, device=device)
-        mask = torch.ones((n_step, n_step), device=device).triu()
-        power = torch.arange(n_step, device=device)
-        t_returns = (torch.pow(gamma, mask * power - power.unsqueeze(1)) * mask * t_rewards).sum(dim=1)
-        mean = self._mean
-        std = np.sqrt(self._variance)
-        t_returns = (t_returns - mean) / (std + eps)
-        return t_returns
-    
     def compute_returns(self, rewards: torch.Tensor, dones: torch.Tensor, truncates: torch.Tensor, next_values: torch.Tensor) -> torch.Tensor:
         assert rewards.shape == dones.shape
         assert rewards.shape == truncates.shape
@@ -130,6 +115,14 @@ class PolicyGradientAgent(Agent):
         logging.info(F'advantages:\n{advantages}, advantages.shape: {advantages.shape}')
         return advantages
     
+    def values(self, experiences: Sequence[Sequence[Experience]]) -> torch.Tensor:
+        values = torch.stack([torch.stack([exp.value if exp.value is not None else torch.tensor(0) for exp in traj ]) for traj in experiences]).to(device)
+        return values
+    
+    def next_values(self, experiences: Sequence[Sequence[Experience]]) -> torch.Tensor:
+        next_values = torch.stack([torch.stack([exp.next_value if exp.next_value is not None else torch.tensor(0) for exp in traj ]) for traj in experiences]).to(device)
+        return next_values
+    
     def reinforce_actor(self, experiences: Sequence[Sequence[Experience]]):
         if not self._actor_optimizer:
             self._actor_optimizer = optim.Adam(self._actor.parameters(), lr=self._hp['lr'])
@@ -139,8 +132,8 @@ class PolicyGradientAgent(Agent):
         dones = torch.tensor([[exp.done for exp in traj] for traj in experiences]).long().to(device)
         truncates = torch.tensor([[exp.truncated for exp in traj] for traj in experiences]).long().to(device)
         log_probs = torch.stack([torch.stack([exp.log_prob for exp in traj if exp.log_prob is not None]) for traj in experiences]).squeeze(2).to(device)
-        values = torch.stack([torch.stack([exp.value for exp in traj if exp.value is not None]) for traj in experiences]).to(device)
-        next_values = torch.stack([torch.stack([exp.next_value for exp in traj if exp.next_value is not None]) for traj in experiences]).to(device)
+        values = self.values(experiences)
+        next_values = self.next_values(experiences)
         logging.info(F'log_probs:\n{log_probs}, log_probs.shape: {log_probs.shape}')
         logging.info(F'rewards:\n{rewards}, rewards.shape: {rewards.shape}')
         logging.info(F'dones:\n{dones}, dones.shape: {dones.shape}')

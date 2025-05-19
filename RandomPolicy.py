@@ -1,13 +1,9 @@
 
 from agent import Agent, Action
 import gymnasium as gym
-import logging
-import numpy as np
 import random
 import torch
-import torch.nn as nn
-import torch.types as torch_types
-from typing import List, Dict, Tuple, Any, Optional
+from typing import List, Dict, Any
 
 class RandomAgent(Agent):
     def __init__(self, a_size: int):

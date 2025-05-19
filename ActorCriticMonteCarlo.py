@@ -1,18 +1,13 @@
 from agent import Action, Agent, Experience
 import argparse
-import collections
 import gymnasium as gym
 import logging
-import numpy as np
 import PolicyGradient
-import random
 import torch
-import torch.distributions as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import torch.types as torch_types
-from typing import Dict, List, MutableSequence, Sequence, Tuple, Any, Optional
+from typing import Dict, List, MutableSequence, Any
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 

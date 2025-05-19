@@ -1,9 +1,5 @@
-import collections
-import gymnasium as gym
-import numpy as np
 import torch
-import torch.types as torch_types
-from typing import Dict, MutableSequence, NamedTuple, Tuple, Any, Optional
+from typing import Dict, MutableSequence, NamedTuple, Any, Optional
 
 class Experience(NamedTuple):
     """Experience tuple for reinforcement learning.

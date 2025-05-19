@@ -2,7 +2,6 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import unittest
 
-from agent import Experience
 import gymnasium as gym
 import io
 import numpy as np
