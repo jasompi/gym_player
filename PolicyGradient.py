@@ -75,6 +75,8 @@ class PolicyGradientAgent(Agent):
         self._mean = hp.get('mean', 0)
         self._variance = hp.get('variance', 0)
         self._n_sample = hp.get('nSample', 0)
+        self._normalize_returns = hp.get('normalize_returns', True)
+        self._actor_losses = []
 
     def train(self, train: bool):
         return self._actor.train(train)
@@ -144,13 +146,15 @@ class PolicyGradientAgent(Agent):
         # Compute returns
         returns = self.compute_returns(rewards, dones, truncates, next_values)
         
-        normlized_returns = self.normalize_return(returns)
+        if self._normalize_returns:
+            returns = self.normalize_return(returns)
 
-        advantages = self.compute_advantage(normlized_returns, values)
+        advantages = self.compute_advantage(returns, values)
         
         logging.info(F'log_probs:\n{log_probs}, log_probs.shape: {log_probs.shape}')
         
         policy_loss = (- log_probs * advantages).sum()
+        self._actor_losses.append(policy_loss.item())
         logging.info(f'policy_loss: {policy_loss}')
         
         self._actor_optimizer.zero_grad()
@@ -185,7 +189,13 @@ class PolicyGradientAgent(Agent):
         if 'optimizer' in state:
             self._actor_optimizer = optim.Adam(self._actor.parameters(), lr=self._hp['lr'])
             self._actor_optimizer.load_state_dict(state['optimizer'])
-
+            
+    def learning_metrics(self) -> str:
+        if self._actor_losses:
+            result = f'actor loss mean: {np.mean(self._actor_losses):.4f} std: {np.std(self._actor_losses):.4f};'
+            self._actor_losses.clear()
+            return result
+        return ""
 
 def create_agent(env: gym.Env, args: List[str]) -> Agent:
     parser = argparse.ArgumentParser()

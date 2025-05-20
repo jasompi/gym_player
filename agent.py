@@ -58,7 +58,7 @@ class Agent:
             Action: A tuple containing the selected action
             and optional tensor for traning.
         """
-        return Action(action=0, log_prob=None, value=None)
+        return Action(action=torch.tensor(0), log_prob=None, value=None)
     
     def reinforce(self, experiences: MutableSequence[Experience], new_experience: int):
         """Perform reinforcement learning update.
@@ -74,3 +74,10 @@ class Agent:
             Dict[str, Any]: The state dictionary of the agent.
         """
         return {}
+
+    def learning_metrics(self) -> str:
+        """Get the learning metrics of the agent.
+        Returns:
+            str: The learning metrics of the agent.
+        """
+        return ""

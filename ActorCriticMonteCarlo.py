@@ -2,6 +2,7 @@ from agent import Action, Agent, Experience
 import argparse
 import gymnasium as gym
 import logging
+import numpy as np
 import PolicyGradient
 import torch
 import torch.nn as nn
@@ -15,14 +16,17 @@ hyperparameters = PolicyGradient.hyperparameters
 hyperparameters['default'].update({
     'c_layers': [],
     'beta': 0.001,
+    'normalize_returns': False,
 })
 hyperparameters['CartPole'].update({
     'c_layers': [16],
     'beta': 0.001,
+    'normalize_returns': False,
 })
 hyperparameters['LunarLander'].update({
     'c_layers': [8],
     'beta': 0.001,
+    'normalize_returns': False,
 })
 
 class Critic(nn.Module):
@@ -42,6 +46,7 @@ class ActorCriticAgent(PolicyGradient.PolicyGradientAgent):
         super(ActorCriticAgent, self).__init__(s_size, a_size, hp)
         self._critic = Critic(s_size, 1, hp['c_layers']).to(device)
         self._critic_optimizer = None
+        self._critic_losses = []
 
     def act(self, state: torch.Tensor) -> Action:
         action, log_prob, value = super(ActorCriticAgent, self).act(state)
@@ -58,6 +63,7 @@ class ActorCriticAgent(PolicyGradient.PolicyGradientAgent):
             self._critic_optimizer = optim.Adam(self._critic.parameters(), lr=self._hp['beta'])
             
         critic_loss = F.mse_loss(returns.detach(), values)
+        self._critic_losses.append(critic_loss.item())
         self._critic_optimizer.zero_grad()
         critic_loss.backward()
         self._critic_optimizer.step()
@@ -85,6 +91,12 @@ class ActorCriticAgent(PolicyGradient.PolicyGradientAgent):
             self._critic_optimizer = None
         super(ActorCriticAgent, self).load_state_dict(state)
 
+    def learning_metrics(self) -> str:
+        result = super(ActorCriticAgent, self).learning_metrics()
+        if self._critic_losses:
+            result += f' critic_loss mean: {np.mean(self._critic_losses):.2f}; std: {np.std(self._critic_losses):.2f}'
+            self._critic_losses.clear()
+        return result
 
 def create_agent(env: gym.Env, args: List[str]) -> Agent:
     parser = argparse.ArgumentParser()

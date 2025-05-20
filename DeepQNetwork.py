@@ -77,6 +77,7 @@ class DQNAgent(Agent):
         self._a_size = a_size
         self._optimizer = None
         self._train = False
+        self._losses = []
 
     def train(self, train: bool):
         self._train = train
@@ -117,6 +118,7 @@ class DQNAgent(Agent):
                 expected_q_values = rewards + (self._gamma * next_q_values * (1 - dones))
 
                 loss = F.mse_loss(q_values, expected_q_values.detach())
+                self._losses.append(loss.item())
                 self._optimizer.zero_grad()
                 loss.backward()
                 self._optimizer.step()
@@ -151,7 +153,13 @@ class DQNAgent(Agent):
         else:
             self._optimizer = None
         logging.debug(f"Loaded DQN agent with hyperparameters: {self._hp}")
-
+        
+    def learning_metrics(self) -> str:
+        if self._losses:
+            result = f'agent loss mean: {np.mean(self._losses):.4f} std: {np.std(self._losses):.4f}'
+            self._losses.clear()
+            return result
+        return ""
 
 def create_agent(env: gym.Env, args: List[str]) -> Agent:
     parser = argparse.ArgumentParser()

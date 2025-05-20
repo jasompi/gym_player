@@ -67,12 +67,12 @@ def play_episode(env,
     logging.debug(f'{env.spec.id} Episode: {episode}; terminated: {done} in {i} steps; total reward: {total_reward}')
     return total_reward, i + 1
 
-def eval_output(e: int, episode_scores: List[float], verbose: int=0):
+def eval_output(e: int, episode_scores: List[float], agent_metrics: str, verbose: int=0):
     if episode_scores:
         mean_reward = np.mean(episode_scores)
         std_reward = np.std(episode_scores)
         if verbose > 0:
-            print(f'Episode {e}: {len(episode_scores)} episodes rewards mean: {mean_reward:.2f}; std: {std_reward:.2f}')
+            print(f'Episode {e}: {len(episode_scores)} episodes rewards mean: {mean_reward:.2f}; std: {std_reward:.2f}; {agent_metrics}')
         return mean_reward, std_reward
     else:
         return 0, 0
@@ -99,14 +99,14 @@ def run_agent(env, n_episode: int, evaluation_episode: int, agent, train: bool, 
                 agent.reinforce(experiences, steps)
 
             if e % evaluation_episode == 0:
-                mean_score, std_score = eval_output(e, list(scores_deque), verbose=verbose)
+                mean_score, std_score = eval_output(e, list(scores_deque), agent.learning_metrics(), verbose=verbose)
                 if mean_score - std_score >= score:
                     print(f"Stopping training at episode {e} with mean score: {mean_score:.2f}, std: {std_score:.2f}")
                     break
                 scores_deque.clear()
 
         if scores_deque:
-            eval_output(e, list(scores_deque), verbose=verbose)
+            eval_output(e, list(scores_deque), agent.learning_metrics(), verbose=verbose)
 
     except KeyboardInterrupt:
         print("\nProgram interrupted by user.")

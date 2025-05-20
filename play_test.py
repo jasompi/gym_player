@@ -23,6 +23,12 @@ def compute_returns_vec(rewards: torch.Tensor, done: bool, next_value: float, ga
     return t_returns
 
 class TestPlayMain(unittest.TestCase):
+    def setUp(self) -> None:
+        self.cwd = os.getcwd()
+        
+    def tearDown(self) -> None:
+        os.chdir(self.cwd)
+
     def run_main(self, argv) -> str:
         # print(' '.join(argv))
         old_stdout = sys.stdout
@@ -91,6 +97,12 @@ class TestPlayMain(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             self.run_test(env_id, policy, tmpdir)
 
+    def test_CartPole_ActorCriticTD(self):
+        env_id = 'CartPole-v1'
+        policy = 'ActorCriticTD'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
 
     def test_CartPole_DeepQNetwork(self):
         env_id = 'CartPole-v1'
@@ -123,6 +135,13 @@ class TestPlayMain(unittest.TestCase):
     def test_LunarLander_ActorCritic(self):
         env_id = 'LunarLander-v3'
         policy = 'ActorCriticMonteCarlo'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+
+    def test_LunarLander_ActorCriticTD(self):
+        env_id = 'LunarLander-v3'
+        policy = 'ActorCriticTD'
         
         with tempfile.TemporaryDirectory() as tmpdir:
             self.run_test(env_id, policy, tmpdir)
