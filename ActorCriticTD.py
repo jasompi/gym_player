@@ -16,11 +16,13 @@ hyperparameters['default'].update({
     'normalize_returns': False,
 })
 hyperparameters['CartPole'].update({
-    'beta': 0.01,
+    'beta': 0.002,
     'td_n': 1,
     'normalize_returns': False,
 })
 hyperparameters['LunarLander'].update({
+    'lr': 0.01,
+    'c_layers': [64, 64],
     'beta': 0.01,
     'td_n': 1,
     'normalize_returns': False,
@@ -31,17 +33,18 @@ class ActorCriticTDAgent(ActorCriticMonteCarlo.ActorCriticAgent):
         super(ActorCriticTDAgent, self).__init__(s_size, a_size, hp)
         self._total_updates = hp.get('total_updates', 0)
         self._td_n = hp.get('td_n', 1)
-    
+        
     def reinforce(self, experiences: MutableSequence[Experience], new_experiences: int):
         logging.info(f"reinforce: {len(experiences)} experiences, {new_experiences} new experiences")
-        if len(experiences) < self._td_n:
+        self.prep_experiences(experiences, new_experiences)
+        if new_experiences < self._td_n:
             return
-        sample = range(len(experiences) - self._td_n + 1)
+        sample = range(len(experiences) - new_experiences, len(experiences) - self._td_n + 1)
         mini_batch = [[experiences[k] for k in range(i, i + self._td_n)] for i in sample]
         self.reinforce_actor(mini_batch)
         self._total_updates += 1
         experiences.clear()
-    
+
     def get_state_dict(self) -> Dict[str, Any]:
         state = super(ActorCriticTDAgent, self).get_state_dict()
         state['critic'] = {key: value.cpu() for key, value in self._critic.state_dict().items()}
@@ -49,7 +52,7 @@ class ActorCriticTDAgent(ActorCriticMonteCarlo.ActorCriticAgent):
         if self._critic_optimizer:
             state['critic_optimizer'] = self._critic_optimizer.state_dict()
         return state
-    
+
     def load_state_dict(self, state: Dict[str, Any]):
         self._total_updates = state['total_updates']
         super(ActorCriticTDAgent, self).load_state_dict(state)

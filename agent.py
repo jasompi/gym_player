@@ -1,7 +1,9 @@
+from dataclasses import dataclass
 import torch
 from typing import Dict, MutableSequence, NamedTuple, Any, Optional
 
-class Experience(NamedTuple):
+@dataclass
+class Experience:
     """Experience tuple for reinforcement learning.
     Attributes:
         state (np.ndarray): The current state of the environment.
@@ -23,6 +25,11 @@ class Experience(NamedTuple):
     log_prob: Optional[torch.Tensor]
     value: Optional[torch.Tensor]
     next_value: Optional[torch.Tensor]
+    def reset_tensors(self):
+        """Reset the tensors in the experience tuple."""
+        self.log_prob = None
+        self.value = None
+        self.next_value = None
 
 
 class Action(NamedTuple):

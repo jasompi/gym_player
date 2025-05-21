@@ -20,11 +20,11 @@ def mean_variance(means: Sequence[float], variances: Sequence[float], n_samples:
     variance = np.sum((np.array(variances)  + np.square(np.array(means) - mean)) * np.array(n_samples)) / n_sample
     return mean, variance, n_sample
 
-def LunarLander_preprocess_experiences(experiences: MutableSequence[Experience]) -> MutableSequence[Experience]:
+def LunarLander_preprocess_experiences(experiences: MutableSequence[Experience], new_experiences: int) -> MutableSequence[Experience]:
     # Preprocess the experience for LunarLander
     # Increase the reward for action 0 (noop) if the lander is in a good position
     total_reward = 0
-    for i in range(len(experiences)):
+    for i in range(len(experiences) - new_experiences, len(experiences)):
         ex = experiences[i]
         total_reward += ex.reward
         if abs(ex.state[0]) < 0.1 and abs(ex.state[1]) < 0.01 and abs(ex.state[3]) < 0.1 and total_reward > 150 and ex.action == 0 and ex.reward > 0:
@@ -87,8 +87,20 @@ class PolicyGradientAgent(Agent):
         probs = self._actor(t_state).cpu()
         m = dist.Categorical(probs)
         action = m.sample()
-        return Action(action, m.log_prob(action), torch.tensor(0, dtype=torch.float32))
+        return Action(action, m.log_prob(action), None)
     
+    def compute_returns_from_experiences(self, experiences: Sequence[Sequence[Experience]]) -> torch.Tensor:
+        rewards = torch.tensor([[exp.reward for exp in traj] for traj in experiences]).float().to(device)
+        dones = torch.tensor([[exp.done for exp in traj] for traj in experiences]).long().to(device)
+        truncates = torch.tensor([[exp.truncated for exp in traj] for traj in experiences]).long().to(device)
+        next_values = self.next_values(experiences)
+ 
+        logging.debug(F'rewards:\n{rewards}, rewards.shape: {rewards.shape}')
+        logging.debug(F'dones:\n{dones}, dones.shape: {dones.shape}')
+        logging.debug(F'truncates:\n{truncates}, truncates.shape: {truncates.shape}')
+        logging.debug(F'next_values:\n{next_values}, next_values.shape: {next_values.shape}')
+        return self.compute_returns(rewards, dones, truncates, next_values)
+        
     def compute_returns(self, rewards: torch.Tensor, dones: torch.Tensor, truncates: torch.Tensor, next_values: torch.Tensor) -> torch.Tensor:
         assert rewards.shape == dones.shape
         assert rewards.shape == truncates.shape
@@ -104,7 +116,7 @@ class PolicyGradientAgent(Agent):
         logging.debug(F'returns:\n{returns}')
         return returns
 
-    def normalize_return(self, returns: torch.Tensor) -> torch.Tensor:
+    def normalize_returns(self, returns: torch.Tensor) -> torch.Tensor:
         self._mean, self._variance, self._n_sample = mean_variance([self._mean, returns.mean().item()], [self._variance, returns.var().item()], [self._n_sample, returns.numel()])
         
         mean = self._mean
@@ -131,24 +143,17 @@ class PolicyGradientAgent(Agent):
             self._actor_optimizer = optim.Adam(self._actor.parameters(), lr=self._hp['lr'])
 
         # Unzip experiences into separate components using list comprehension
-        rewards = torch.tensor([[exp.reward for exp in traj] for traj in experiences]).float().to(device)
-        dones = torch.tensor([[exp.done for exp in traj] for traj in experiences]).long().to(device)
-        truncates = torch.tensor([[exp.truncated for exp in traj] for traj in experiences]).long().to(device)
         log_probs = torch.stack([torch.stack([exp.log_prob for exp in traj if exp.log_prob is not None]) for traj in experiences]).squeeze(2).to(device)
-        values = self.values(experiences)
-        next_values = self.next_values(experiences)
         logging.debug(F'log_probs:\n{log_probs}, log_probs.shape: {log_probs.shape}')
-        logging.debug(F'rewards:\n{rewards}, rewards.shape: {rewards.shape}')
-        logging.debug(F'dones:\n{dones}, dones.shape: {dones.shape}')
-        logging.debug(F'truncates:\n{truncates}, truncates.shape: {truncates.shape}')
+
+        values = self.values(experiences)
         logging.debug(F'values:\n{values}, values.shape: {values.shape}')
-        logging.debug(F'next_values:\n{next_values}, next_values.shape: {next_values.shape}')
         
         # Compute returns
-        returns = self.compute_returns(rewards, dones, truncates, next_values)
+        returns = self.compute_returns_from_experiences(experiences)
         
         if self._normalize_returns:
-            returns = self.normalize_return(returns)
+            returns = self.normalize_returns(returns)
 
         advantages = self.compute_advantage(returns, values)
         
@@ -164,7 +169,7 @@ class PolicyGradientAgent(Agent):
 
     def prep_experiences(self, experiences: MutableSequence[Experience], new_experiences: int):
         if self._hp['prep']:
-            experiences = self._hp['prep'](experiences)
+            experiences = self._hp['prep'](experiences, new_experiences)
         
     def reinforce(self, experiences: MutableSequence[Experience], new_experiences: int):
         self.prep_experiences(experiences, new_experiences)

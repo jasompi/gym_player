@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from typing import Dict, List, MutableSequence, Any
+from typing import Dict, List, MutableSequence, Sequence, Any
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -57,17 +57,26 @@ class ActorCriticAgent(PolicyGradient.PolicyGradientAgent):
     def train(self, train: bool):
         super(ActorCriticAgent, self).train(train)
         self._critic.train(train)
- 
-    def compute_advantage(self, returns: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
+        
+    def values(self, experiences: Sequence[Sequence[Experience]]) -> torch.Tensor:
+        values = torch.stack([torch.stack([exp.value if exp.value is not None else self._critic(exp.state.unsqueeze(0)).squeeze() for exp in traj ]) for traj in experiences]).to(device)
+        return values
+    
+    def next_values(self, experiences: Sequence[Sequence[Experience]]) -> torch.Tensor:
+        next_values = torch.stack([torch.stack([torch.tensor(0.0) if exp.done else (exp.next_value if exp.next_value is not None else self._critic(exp.next_state.unsqueeze(0)).squeeze().detach()) for exp in traj ]) for traj in experiences]).to(device)
+        return next_values
+    
+    def reinforce_critic(self, values: torch.Tensor, targets: torch.Tensor):
         if self._critic_optimizer is None:
             self._critic_optimizer = optim.Adam(self._critic.parameters(), lr=self._hp['beta'])
-            
-        critic_loss = F.mse_loss(returns.detach(), values)
+        critic_loss = F.mse_loss(values, targets)
         self._critic_losses.append(critic_loss.item())
         self._critic_optimizer.zero_grad()
         critic_loss.backward()
         self._critic_optimizer.step()
-
+ 
+    def compute_advantage(self, returns: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
+        self.reinforce_critic(values, returns.detach())
         advantages = returns.detach() - values.detach()
         logging.debug(F'advantages:\n{advantages}')
         return advantages.detach()
