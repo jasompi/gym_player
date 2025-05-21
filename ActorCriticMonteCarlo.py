@@ -15,17 +15,17 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 hyperparameters = PolicyGradient.hyperparameters
 hyperparameters['default'].update({
     'c_layers': [],
-    'beta': 0.001,
+    'beta': 0.01,
     'normalize_returns': False,
 })
 hyperparameters['CartPole'].update({
     'c_layers': [16],
-    'beta': 0.001,
+    'beta': 0.01,
     'normalize_returns': False,
 })
 hyperparameters['LunarLander'].update({
     'c_layers': [8],
-    'beta': 0.001,
+    'beta': 0.01,
     'normalize_returns': False,
 })
 
@@ -69,7 +69,7 @@ class ActorCriticAgent(PolicyGradient.PolicyGradientAgent):
         self._critic_optimizer.step()
 
         advantages = returns.detach() - values.detach()
-        logging.info(F'advantages:\n{advantages}')
+        logging.debug(F'advantages:\n{advantages}')
         return advantages.detach()
     
     def reinforce(self, experiences: MutableSequence[Experience], new_experiences: int):

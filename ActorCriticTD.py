@@ -13,14 +13,17 @@ hyperparameters = ActorCriticMonteCarlo.hyperparameters
 hyperparameters['default'].update({
     'beta': 0.01,
     'td_n': 1,
+    'normalize_returns': False,
 })
 hyperparameters['CartPole'].update({
     'beta': 0.01,
     'td_n': 1,
+    'normalize_returns': False,
 })
 hyperparameters['LunarLander'].update({
     'beta': 0.01,
     'td_n': 1,
+    'normalize_returns': False,
 })
 
 class ActorCriticTDAgent(ActorCriticMonteCarlo.ActorCriticAgent):

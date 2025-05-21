@@ -77,6 +77,7 @@ class PolicyGradientAgent(Agent):
         self._n_sample = hp.get('nSample', 0)
         self._normalize_returns = hp.get('normalize_returns', True)
         self._actor_losses = []
+        logging.info(f'normlize_returns: {self._normalize_returns}')
 
     def train(self, train: bool):
         return self._actor.train(train)
@@ -100,7 +101,7 @@ class PolicyGradientAgent(Agent):
             disc_returns = (self._gamma * (1 - dones[:,t]) * ((1 - truncates[:, t]) * disc_returns + truncates[:, t] * next_values[:, t]) + rewards[:,t])
             returns = torch.cat((disc_returns.unsqueeze(1), returns), dim=1)
             
-        logging.info(F'returns:\n{returns}')
+        logging.debug(F'returns:\n{returns}')
         return returns
 
     def normalize_return(self, returns: torch.Tensor) -> torch.Tensor:
@@ -109,12 +110,12 @@ class PolicyGradientAgent(Agent):
         mean = self._mean
         std = np.sqrt(self._variance)
         returns = (returns - mean) / (std + eps)
-        logging.info(F'returns:\n{returns}')
+        logging.debug(F'returns:\n{returns}')
         return returns
         
     def compute_advantage(self, returns: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
         advantages = returns - 0.0
-        logging.info(F'advantages:\n{advantages}, advantages.shape: {advantages.shape}')
+        logging.debug(F'advantages:\n{advantages}, advantages.shape: {advantages.shape}')
         return advantages
     
     def values(self, experiences: Sequence[Sequence[Experience]]) -> torch.Tensor:
@@ -136,12 +137,12 @@ class PolicyGradientAgent(Agent):
         log_probs = torch.stack([torch.stack([exp.log_prob for exp in traj if exp.log_prob is not None]) for traj in experiences]).squeeze(2).to(device)
         values = self.values(experiences)
         next_values = self.next_values(experiences)
-        logging.info(F'log_probs:\n{log_probs}, log_probs.shape: {log_probs.shape}')
-        logging.info(F'rewards:\n{rewards}, rewards.shape: {rewards.shape}')
-        logging.info(F'dones:\n{dones}, dones.shape: {dones.shape}')
-        logging.info(F'truncates:\n{truncates}, truncates.shape: {truncates.shape}')
-        logging.info(F'values:\n{values}, values.shape: {values.shape}')
-        logging.info(F'next_values:\n{next_values}, next_values.shape: {next_values.shape}')
+        logging.debug(F'log_probs:\n{log_probs}, log_probs.shape: {log_probs.shape}')
+        logging.debug(F'rewards:\n{rewards}, rewards.shape: {rewards.shape}')
+        logging.debug(F'dones:\n{dones}, dones.shape: {dones.shape}')
+        logging.debug(F'truncates:\n{truncates}, truncates.shape: {truncates.shape}')
+        logging.debug(F'values:\n{values}, values.shape: {values.shape}')
+        logging.debug(F'next_values:\n{next_values}, next_values.shape: {next_values.shape}')
         
         # Compute returns
         returns = self.compute_returns(rewards, dones, truncates, next_values)
@@ -151,20 +152,22 @@ class PolicyGradientAgent(Agent):
 
         advantages = self.compute_advantage(returns, values)
         
-        logging.info(F'log_probs:\n{log_probs}, log_probs.shape: {log_probs.shape}')
+        logging.debug(F'log_probs:\n{log_probs}, log_probs.shape: {log_probs.shape}')
         
         policy_loss = (- log_probs * advantages).sum()
         self._actor_losses.append(policy_loss.item())
-        logging.info(f'policy_loss: {policy_loss}')
+        logging.debug(f'policy_loss: {policy_loss}')
         
         self._actor_optimizer.zero_grad()
         policy_loss.backward()
         self._actor_optimizer.step()
 
-    
-    def reinforce(self, experiences: MutableSequence[Experience], new_experience: int):
+    def prep_experiences(self, experiences: MutableSequence[Experience], new_experiences: int):
         if self._hp['prep']:
             experiences = self._hp['prep'](experiences)
+        
+    def reinforce(self, experiences: MutableSequence[Experience], new_experiences: int):
+        self.prep_experiences(experiences, new_experiences)
         self.reinforce_actor([experiences])
         experiences.clear()
     
