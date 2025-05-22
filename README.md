@@ -12,11 +12,19 @@ Gym Environment:
 
 * CartPole-v1
   
-  [![CartPole](https://raw.githubusercontent.com/jasompi/gym_player/refs/heads/main/videos/CartPole-v1-episode-1.jpg)](https://raw.githubusercontent.com/jasompi/gym_player/refs/heads/main/videos/CartPole-v1-episode-1.mp4)
+  
+
+ https://github.com/user-attachments/assets/5be94564-3154-4854-8c5c-2e4a73d7dcaf
+
+
 
 * LunarLander-v3
 
-  [![LunarLander](https://raw.githubusercontent.com/jasompi/gym_player/refs/heads/main/videos/LunarLander.jpg)](https://raw.githubusercontent.com/jasompi/gym_player/refs/heads/main/videos/LunarLander.mp4)
+ 
+
+ https://github.com/user-attachments/assets/ed647616-7342-4264-9a6b-5bf4b49da9ab
+
+
 
 ## Train an agent:
 
