@@ -13,11 +13,12 @@ from typing import Dict, List, MutableSequence, Sequence, Any
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 hyperparameters = PolicyGradient.hyperparameters
-hyperparameters['default'].update({
-    'c_layers': [],
-    'beta': 0.01,
-    'normalize_returns': False,
-})
+for key in hyperparameters:
+    hyperparameters[key].update({
+        'c_layers': [16],
+        'beta': 0.01,
+        'normalize_returns': False,
+    })
 hyperparameters['CartPole'].update({
     'c_layers': [16],
     'beta': 0.01,
@@ -27,6 +28,12 @@ hyperparameters['LunarLander'].update({
     'c_layers': [8],
     'beta': 0.01,
     'normalize_returns': False,
+})
+hyperparameters['Pixelcopter'].update({
+    'lr': 0.001,
+    'c_layers': [64],
+    'beta': 0.001,
+    'normalize_returns': True,
 })
 
 class Critic(nn.Module):

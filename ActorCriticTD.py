@@ -89,6 +89,8 @@ def create_agent(env: gym.Env, args: List[str]) -> Agent:
             hp['td_n'] = max(1, int(__name__[len('ActorCriticTD'):]))
         except ValueError:
             logging.warning(f"Invalid td_n value from __name__: {__name__}. Using default value.")
+    else:
+        hp['td_n'] = 1
 
     print(f"Creating {__name__} for {envId} with actor layers: {hp['layers']}, critic layers: {hp['c_layers']}, gamma: {hp['gamma']}, alpha: {hp['lr']}, beta: {hp['beta']}, td_n: {hp['td_n']}")
     

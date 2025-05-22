@@ -41,6 +41,14 @@ hyperparameters = {
         'epsilon_min': 0.01,
         'epsilon_decay': 0.995,
     },
+    'Pixelcopter':  {
+        'layers': [64, 64],
+        'gamma': 0.995,
+        'lr': 0.1,
+        'tau': 0.01,
+        'epsilon_min': 0.01,
+        'epsilon_decay': 0.999,
+    },
 }
 
 class DeepQNetwork(nn.Module):

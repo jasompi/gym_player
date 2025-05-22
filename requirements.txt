@@ -1,3 +1,6 @@
+git+https://github.com/ntasfi/PyGame-Learning-Environment@master
+git+https://github.com/jasompi/gym-games@gymnasium-migration
+gym==0.26.2
 gymnasium[box2d]==1.1.1
 imageio==2.37.0
 imageio-ffmpeg==0.6.0

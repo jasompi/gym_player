@@ -17,13 +17,13 @@
             "justMyCode": true
         },
         {
-            "name": "play ActorCryticTD",
+            "name": "play Pixelcopter",
             "type": "debugpy",
             "request": "launch",
             "module": "play",
             "args": [
-                "-e=CartPole-v1",
-                "-a=ActorCriticTD",
+                "-e=Pixelcopter-PLE-v0",
+                "-a=RandomPolicy",
                 "-v",
                 "-t",
                 "-n=1",

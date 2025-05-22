@@ -38,17 +38,23 @@ hyperparameters = {
         'lr': 0.01,
         'prep': None
     },
-    'CartPole':  {
+    'CartPole': {
         'layers': [16],
         'gamma': 1.0,
         'lr': 0.01,
         'prep': None
     },
-    'LunarLander':  {
+    'LunarLander': {
         'layers': [8],
         'gamma': 0.99,
         'lr': 0.01,
         'prep': LunarLander_preprocess_experiences,
+    },
+    'Pixelcopter': {
+        'layers': [64],
+        'gamma': 0.99,
+        'lr': 0.0001,
+        'prep': None
     },
 }
 

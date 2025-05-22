@@ -29,25 +29,28 @@ class TestPlayMain(unittest.TestCase):
     def tearDown(self) -> None:
         os.chdir(self.cwd)
 
-    def run_main(self, argv) -> str:
+    def run_main(self, argv) -> list[str]:
         # print(' '.join(argv))
         old_stdout = sys.stdout
         sys.stdout = captured_output = io.StringIO()
         play.main(argv)
         sys.stdout = old_stdout
         output = captured_output.getvalue()
-        # print(output)
-        return output
+        print(output)
+        lines = output.split('\n')
+        for i in range(len(lines)):
+            if lines[i].startswith('Initializing environment: '):
+                break
+        return lines[i+1:]
 
     def run_test(self, env_id: str, agent: str, tmpdir: str, max_steps: int=20):
         if not os.path.exists(tmpdir):
             os.makedirs(tmpdir)
         os.chdir(tmpdir)
         video_dir =  'videos'
-        output = self.run_main([f'-e={env_id}', f'-a={agent}', '-n=3', f'-m={max_steps}', f'-r={video_dir}', '-t', '--log=ERROR'])
+        lines = self.run_main([f'-e={env_id}', f'-a={agent}', '-n=3', f'-m={max_steps}', f'-r={video_dir}', '-t', '--log=ERROR'])
 
         self.assertTrue(os.path.exists(video_dir), "video directory not created")
-        lines = output.split('\n')
         self.assertRegex(lines[0], fr'Creating {agent} for {env_id}')
         self.assertIn(f'train {agent} for {env_id} for 3 episodes with {max_steps} steps', lines[1])
         for i in range(1, 4):
@@ -60,8 +63,7 @@ class TestPlayMain(unittest.TestCase):
         filename = match.group(0) # type: ignore
         self.assertTrue(os.path.exists(filename), "policy file not created")
         
-        output = self.run_main([f'-f={filename}', '-t', '--log=ERROR'])
-        lines = output.split('\n')
+        lines = self.run_main([f'-f={filename}', '-t', '--log=ERROR'])
         self.assertRegex(lines[0], fr'Loading {agent} for {env_id}')
         self.assertIn(f'train {agent} for {env_id} for 1000 episodes with {max_steps} steps', lines[1])
 
@@ -70,8 +72,7 @@ class TestPlayMain(unittest.TestCase):
         filename1 = match.group(0) # type: ignore
         self.assertTrue(os.path.exists(filename1), "policy file not created")
     
-        output = self.run_main([f'-f={filename1}', '-r=display', '-n=2', '-v', '--log=ERROR'])
-        lines = output.split('\n')
+        lines = self.run_main([f'-f={filename1}', '-r=display', '-n=2', '-v', '--log=ERROR'])
         self.assertRegex(lines[0], fr'Loading {agent} for {env_id}')
         self.assertIn(f'eval {agent} for {env_id} for 2 episodes with {max_steps} steps', lines[1])
         self.assertRegex(lines[2], r'2 episodes rewards mean: (-?\d+\.\d+); std: (\d+\.\d+)')
@@ -159,7 +160,49 @@ class TestPlayMain(unittest.TestCase):
         
         with tempfile.TemporaryDirectory() as tmpdir:
             self.run_test(env_id, policy, tmpdir)
-    
+
+    def test_Pixelcopter_RandomPolicy(self):
+        env_id = 'Pixelcopter-PLE-v0'
+        policy = 'RandomPolicy'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+
+    def test_Pixelcopter_PolicyGradient(self):
+        env_id = 'Pixelcopter-PLE-v0'
+        policy = 'PolicyGradient'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+            
+    def test_Pixelcopter_ActorCritic(self):
+        env_id = 'Pixelcopter-PLE-v0'
+        policy = 'ActorCriticMonteCarlo'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+
+    def test_Pixelcopter_ActorCriticTD(self):
+        env_id = 'Pixelcopter-PLE-v0'
+        policy = 'ActorCriticTD'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+
+    def test_Pixelcopter_DeepQNetwork(self):
+        env_id = 'Pixelcopter-PLE-v0'
+        policy = 'DeepQNetwork'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+
+    def test_Pixelcopter_SARSA(self):
+        env_id = 'Pixelcopter-PLE-v0'
+        policy = 'SARSA'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+            
     def test_PolicyGradient_compute_returns(self):
         env_id = 'CartPole-v1'
         env = gym.make(env_id)

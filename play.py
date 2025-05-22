@@ -5,6 +5,7 @@ import argparse
 import collections
 import datetime
 import gymnasium as gym
+import gym_pygame
 import importlib
 import imageio
 import logging
@@ -21,7 +22,8 @@ def play_episode(env,
                  episode: int,
                  agent: Agent,
                  experiences: Optional[collections.deque[Experience]] = None,
-                 frame_buffer: Optional[List[np.ndarray]] = None) -> Tuple[float, int]:
+                 frame_buffer: Optional[List[np.ndarray]] = None,
+                 delay: int = 0) -> Tuple[float, int]:
     """Play a single episode in the environment using the given agent.
     Args:
         env (gym.Env): The environment to play in.
@@ -64,6 +66,9 @@ def play_episode(env,
         # If the episode has ended then we can reset to start a new episode
         if done or truncated:
             break
+        if delay:
+            time.sleep(delay / 1000)
+
     logging.debug(f'{env.spec.id} Episode: {episode}; terminated: {done} in {i} steps; total reward: {total_reward}')
     return total_reward, i + 1
 
@@ -77,7 +82,7 @@ def eval_output(e: int, episode_scores: List[float], agent_metrics: str, verbose
     else:
         return 0, 0
 
-def run_agent(env, n_episode: int, evaluation_episode: int, agent, train: bool, score: float, out_directory: Optional[str]=None, verbose=0):
+def run_agent(env, n_episode: int, evaluation_episode: int, agent, train: bool, score: float, out_directory: Optional[str]=None, verbose=0, delay: int=0):
     verbose = max(verbose, 0 if train else 1)
     scores_deque = collections.deque(maxlen=evaluation_episode)
     experiences: collections.deque[Experience] = collections.deque(maxlen=MAX_EXPERIENCES_SIZE)
@@ -86,7 +91,7 @@ def run_agent(env, n_episode: int, evaluation_episode: int, agent, train: bool, 
     start = time.time()
     try:
         for e in range(1, n_episode + 1):
-            reward, steps = play_episode(env, e, agent, experiences if train else None, frame_buffer if out_directory else None)
+            reward, steps = play_episode(env, e, agent, experiences if train else None, frame_buffer if out_directory else None, delay)
             scores_deque.append(reward)
             total_steps += steps
             if len(frame_buffer) and out_directory:
@@ -126,6 +131,7 @@ def main(argv: List[str]):
     parser.add_argument('-t', '--train', action='store_true', help='train the agent')
     parser.add_argument('-s', '--score', type=float, default=float('inf'), help='score threshold to stop training')
     parser.add_argument('-r', '--render', help='render mode. `display` to rander on display or PATH to record video for every episode and save it to PATH')
+    parser.add_argument('-d', '--delay', type=int, default=0, help='delay microseconds between frames')
     parser.add_argument('--log', default=logging.WARNING, help='log level')
 
     args, unrecognized = parser.parse_known_args(argv)
@@ -152,10 +158,11 @@ def main(argv: List[str]):
         parser.print_help()
         exit(0)
     
-    max_step = args.max_step or state.get('max_step', None)
+    max_step = args.max_step or state.get('max_step', None) or 1000
 
     # Initialise the environment
     env = gym.make(envId, max_episode_steps=max_step, render_mode=render_mode)
+    print(f'Initializing environment: {envId}')
 
     agent_module = state.get('agent', args.agent)
     try:
@@ -176,7 +183,7 @@ def main(argv: List[str]):
         print(f'eval {agent_module} for {envId} for {n_episode} episodes with {max_step_env} steps')
         eval_episode = n_episode
 
-    run_agent(env, n_episode, eval_episode, agent, train=args.train, score=args.score, verbose=args.verbose, out_directory=out_directory)
+    run_agent(env, n_episode, eval_episode, agent, train=args.train, score=args.score, verbose=args.verbose, out_directory=out_directory, delay=args.delay)
     if args.train:
         filename = args.filename
         if state or not filename:
