@@ -1,9 +1,22 @@
 # Gymnasium Player
 
-Experiment agents with reinforcement learning algorithms algorithms.
+Experiment agents with reinforcement learning algorithms algorithms:
 
 * Deep Q-Network
 * Policy Gradient
+* Actor Critic
+
+* Monte Carlo vs TD(n)
+
+Gym Environment:
+
+* CartPole-v1
+  
+  [![CartPole](https://raw.githubusercontent.com/jasompi/gym_player/refs/heads/main/videos/CartPole-v1-episode-1.jpg)](https://raw.githubusercontent.com/jasompi/gym_player/refs/heads/main/videos/CartPole-v1-episode-1.mp4)
+
+* LunarLander-v3
+
+  [![LunarLander](https://raw.githubusercontent.com/jasompi/gym_player/refs/heads/main/videos/LunarLander.jpg)](https://raw.githubusercontent.com/jasompi/gym_player/refs/heads/main/videos/LunarLander.mp4)
 
 ## Train an agent:
 
@@ -61,29 +74,4 @@ options:
   -r RENDER, --render RENDER
                         render mode. `display` to rander on display or PATH to record video for every episode and save it to PATH
   --log LOG             log level
-```
-
-## Arguments for the PolicyGradient
-
-```
-options:
-  -h, --help            show this help message and exit
-  -l [LAYERS ...], --layers [LAYERS ...]
-                        an integer for the accumulator
-  --lr LR               learning rate
-  --gamma GAMMA         discount rate for reward
-```
-
-## Argument for the DeepQNetwork
-
-```
-options:
-  -h, --help            show this help message and exit
-  -l [LAYERS ...], --layers [LAYERS ...]
-                        an integer for the accumulator
-  --lr LR               learning rate
-  --gamma GAMMA         discount rate for reward
-  --tau TAU             soft update rate. Use 0 for hard update
-  --epsilon-decay EPSILON_DECAY
-                        epsilon decay rate
 ```
