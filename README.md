@@ -11,20 +11,16 @@ Experiment agents with reinforcement learning algorithms algorithms:
 Gym Environment:
 
 * CartPole-v1
-  
-  
 
  https://github.com/user-attachments/assets/5be94564-3154-4854-8c5c-2e4a73d7dcaf
 
-
-
 * LunarLander-v3
-
- 
 
  https://github.com/user-attachments/assets/ed647616-7342-4264-9a6b-5bf4b49da9ab
 
+* Pixelcopter
 
+ https://github.com/user-attachments/assets/7ed501fb-5aa0-422d-bc89-d32ce0a2de90
 
 ## Train an agent:
 
