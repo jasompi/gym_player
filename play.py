@@ -82,35 +82,40 @@ def eval_output(e: int, episode_scores: List[float], agent_metrics: str, verbose
     else:
         return 0, 0
 
-def run_agent(env, n_episode: int, evaluation_episode: int, agent, train: bool, score: float, out_directory: Optional[str]=None, verbose=0, delay: int=0):
-    verbose = max(verbose, 0 if train else 1)
-    scores_deque = collections.deque(maxlen=evaluation_episode)
+def run_agent(env, n_episode: int, evaluation_episode_freq: int, agent, training_frequency: int, score: float, out_directory: Optional[str]=None, verbose=0, delay: int=0):
+    verbose = max(verbose, 0 if training_frequency else 1) # if training_frequency is 0 (eval), verbose is at least 1
+    scores_deque = collections.deque(maxlen=evaluation_episode_freq)
     experiences: collections.deque[Experience] = collections.deque(maxlen=MAX_EXPERIENCES_SIZE)
     frame_buffer: List[np.ndarray] = []
     total_steps = 0
+    steps_since_last_train = 0
     start = time.time()
     try:
         for e in range(1, n_episode + 1):
-            reward, steps = play_episode(env, e, agent, experiences if train else None, frame_buffer if out_directory else None, delay)
+            reward, steps = play_episode(env, e, agent, experiences if training_frequency else None, frame_buffer if out_directory else None, delay)
             scores_deque.append(reward)
             total_steps += steps
+            if training_frequency: # Accumulate steps if in training mode
+                steps_since_last_train += steps
+
             if len(frame_buffer) and out_directory:
                 filename = os.path.join(out_directory, f'{env.spec.id}-episode-{e}.mp4')
                 imageio.mimwrite(filename, [np.array(img_frame) for _, img_frame in enumerate(frame_buffer)], fps=env.metadata['render_fps'])
                 print(f"Video saved to {filename}")
                 frame_buffer.clear()
-            if train and experiences:
-                logging.info(f'{env.spec.id} Episode: {e} training agent with {len(experiences)} experiences')
-                agent.reinforce(experiences, steps)
+            if training_frequency and experiences and e % training_frequency == 0:
+                logging.info(f'{env.spec.id} Training after episode: {e}. Total experiences in buffer: {len(experiences)}. Cumulative untrained steps: {steps_since_last_train}.')
+                agent.reinforce(experiences, steps_since_last_train)
+                steps_since_last_train = 0 # Reset accumulator after training
 
-            if e % evaluation_episode == 0:
+            if e % evaluation_episode_freq == 0:
                 mean_score, std_score = eval_output(e, list(scores_deque), agent.learning_metrics(), verbose=verbose)
                 if mean_score - std_score >= score:
                     print(f"Stopping training at episode {e} with mean score: {mean_score:.2f}, std: {std_score:.2f}")
                     break
                 scores_deque.clear()
 
-        if scores_deque:
+        if scores_deque: # Check if scores_deque is not empty before eval_output
             eval_output(e, list(scores_deque), agent.learning_metrics(), verbose=verbose)
 
     except KeyboardInterrupt:
@@ -128,7 +133,17 @@ def main(argv: List[str]):
     parser.add_argument('-n', '--num-episode', type=int, help='number of episode')
     parser.add_argument('-m', '--max-step', type=int, help='max number of step in an episode')
     parser.add_argument('-u', '--evaluation-episode', type=int, help='show evaluation score every number of episode')
-    parser.add_argument('-t', '--train', action='store_true', help='train the agent')
+    parser.add_argument(
+        '-t', '--train-freq',
+        type=int,
+        nargs='?',
+        const=1,  # Value if flag is present without arg
+        default=0, # Value if flag is not present
+        metavar='N_EPISODES',
+        help='Frequency of training, in episodes. '
+             '0: Evaluation mode (no training). '
+             '1 (or -t alone): Train after every episode. '
+             'N (>1): Train after every N episodes. Default: 0.')
     parser.add_argument('-s', '--score', type=float, default=float('inf'), help='score threshold to stop training')
     parser.add_argument('-r', '--render', help='render mode. `display` to rander on display or PATH to record video for every episode and save it to PATH')
     parser.add_argument('-d', '--delay', type=int, default=0, help='delay microseconds between frames')
@@ -173,18 +188,23 @@ def main(argv: List[str]):
 
     agent = pm.load_agent(env, state) if state else pm.create_agent(env, unrecognized)
 
-    n_episode = args.num_episode or (1000 if args.train else 10)
- 
-    max_step_env = env.spec.max_episode_steps or max_step # type: ignore
-    if args.train:
-        print(f'train {agent_module} for {envId} for {n_episode} episodes with {max_step_env} steps')
-        eval_episode = args.evaluation_episode or int(n_episode / 25) or n_episode
-    else:
-        print(f'eval {agent_module} for {envId} for {n_episode} episodes with {max_step_env} steps')
-        eval_episode = n_episode
+    training_frequency = args.train_freq
+    if training_frequency < 0:
+        parser.error("--train-freq cannot be negative.")
 
-    run_agent(env, n_episode, eval_episode, agent, train=args.train, score=args.score, verbose=args.verbose, out_directory=out_directory, delay=args.delay)
-    if args.train:
+    max_step_env = env.spec.max_episode_steps or max_step # type: ignore
+
+    if training_frequency: # Non-zero training_frequency means training mode
+        actual_n_episode = args.num_episode or 1000  # Default training episodes
+        print(f'train {agent_module} for {envId} for {actual_n_episode} episodes with {max_step_env} steps, training every {training_frequency} episode(s).')
+        eval_episode_freq = args.evaluation_episode or int(actual_n_episode / 25) or actual_n_episode
+    else:  # training_frequency == 0, evaluation mode
+        actual_n_episode = args.num_episode or 10  # Default evaluation episodes
+        print(f'eval {agent_module} for {envId} for {actual_n_episode} episodes with {max_step_env} steps.')
+        eval_episode_freq = actual_n_episode # Evaluate once at the end for eval mode
+
+    run_agent(env, actual_n_episode, eval_episode_freq, agent, training_frequency, score=args.score, verbose=args.verbose, out_directory=out_directory, delay=args.delay)
+    if training_frequency: # Non-zero training_frequency means training mode
         filename = args.filename
         if state or not filename:
             filename = f'{envId}-{agent_module}-{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}.pt'
