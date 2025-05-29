@@ -45,9 +45,9 @@ hyperparameters = {
         'prep': None
     },
     'LunarLander': {
-        'layers': [8],
+        'layers': [16],
         'gamma': 0.99,
-        'lr': 0.01,
+        'lr': 0.001,
         'prep': LunarLander_preprocess_experiences,
     },
     'Pixelcopter': {

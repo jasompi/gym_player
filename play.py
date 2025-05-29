@@ -92,7 +92,7 @@ def run_agent(env, n_episode: int, evaluation_episode_freq: int, agent, training
     start = time.time()
     try:
         for e in range(1, n_episode + 1):
-            reward, steps = play_episode(env, e, agent, experiences if training_frequency else None, frame_buffer if out_directory else None, delay)
+            reward, steps = play_episode(env, e, agent, experiences if training_frequency else None, frame_buffer if out_directory and e % evaluation_episode_freq == 0 else None, delay)
             scores_deque.append(reward)
             total_steps += steps
             if training_frequency: # Accumulate steps if in training mode

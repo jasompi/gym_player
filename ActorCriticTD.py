@@ -21,11 +21,8 @@ hyperparameters['CartPole'].update({
     'normalize_returns': False,
 })
 hyperparameters['LunarLander'].update({
-    'lr': 0.01,
     'c_layers': [64, 64],
-    'beta': 0.01,
     'td_n': 1,
-    'normalize_returns': False,
 })
 
 class ActorCriticTDAgent(ActorCriticMonteCarlo.ActorCriticAgent):
@@ -92,7 +89,7 @@ def create_agent(env: gym.Env, args: List[str]) -> Agent:
     else:
         hp['td_n'] = 1
 
-    print(f"Creating {__name__} for {envId} with actor layers: {hp['layers']}, critic layers: {hp['c_layers']}, gamma: {hp['gamma']}, alpha: {hp['lr']}, beta: {hp['beta']}, td_n: {hp['td_n']}")
+    print(f"Creating {__name__} for {envId} with actor layers: {hp['layers']}, critic layers: {hp['c_layers']}, gamma: {hp['gamma']}, alpha: {hp['lr']}, beta: {hp['beta']}, critic_anchor_strength: {hp.get('critic_anchor_strength', 0.0)}, td_n: {hp['td_n']}")
     
     return ActorCriticTDAgent(s_size, a_size, hp=hp)
 
@@ -106,7 +103,7 @@ def load_agent(env: gym.Env, state: Dict[str, Any]) -> Agent:
     agent = ActorCriticTDAgent(s_size, a_size, hp=hp)
     agent.load_state_dict(state)
     
-    print(f"Loading {__name__} for {envId} with layers: {hp['layers']}, critic layers: {hp['c_layers']}, gamma: {agent._gamma}, alpha: {hp['lr']}, beta: {hp['beta']}, total_updates: {agent._total_updates}, td_n: {agent._td_n}") 
+    print(f"Loading {__name__} for {envId} with layers: {hp['layers']}, critic layers: {hp['c_layers']}, gamma: {agent._gamma}, alpha: {hp['lr']}, beta: {hp['beta']}, critic_anchor_strength: {hp.get('critic_anchor_strength', 0.0)}, total_updates: {agent._total_updates}, td_n: {agent._td_n}") 
 
     return agent
 
