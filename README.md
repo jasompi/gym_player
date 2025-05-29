@@ -22,8 +22,15 @@ Gym Environment:
 
  https://github.com/user-attachments/assets/7ed501fb-5aa0-422d-bc89-d32ce0a2de90
 
-## Train an agent:
+## Setup
+```
+sudo apt install swig
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
+## Train an agent:
 ```
 $ ./play.py -e CartPole -a DeepQNetwork -t -v -n 10000 -s 400
 Creating DeepQNetwork for CartPole-v1 with layers: [16], gamma: 1.0, lr: 0.01
