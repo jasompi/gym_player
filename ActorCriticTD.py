@@ -29,6 +29,11 @@ hyperparameters['LunarLander'].update({
     'td_n': 1,
     'normalize_returns': False,
 })
+hyperparameters['Pixelcopter'].update({
+    'c_layers': [64],
+    'td_n': 1,
+    'normalize_returns': False,
+})
 
 class ActorCriticTDAgent(ActorCriticMonteCarlo.ActorCriticAgent):
     def __init__(self, s_size: int, a_size: int, hp : Dict[str, Any]={}):

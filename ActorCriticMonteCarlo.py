@@ -37,7 +37,7 @@ hyperparameters['Pixelcopter'].update({
     'c_layers': [64],
     'beta': 0.001,
     'critic_anchor_strength': 0.001,
-    'normalize_returns': True,
+    'normalize_returns': False,
 })
 
 class Critic(nn.Module):
