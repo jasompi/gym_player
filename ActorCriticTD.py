@@ -1,3 +1,4 @@
+import random
 import ActorCriticMonteCarlo
 from agent import Action, Agent, Experience
 import argparse
@@ -8,6 +9,9 @@ import torch
 from typing import Dict, List, MutableSequence, Any
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+MINI_BATCH_SIZE = 32
+STEP_PER_UPDATE = 4
 
 hyperparameters = ActorCriticMonteCarlo.hyperparameters
 hyperparameters['default'].update({
@@ -23,6 +27,7 @@ hyperparameters['CartPole'].update({
 hyperparameters['LunarLander'].update({
     'c_layers': [64, 64],
     'td_n': 1,
+    'normalize_returns': False,
 })
 
 class ActorCriticTDAgent(ActorCriticMonteCarlo.ActorCriticAgent):
@@ -30,6 +35,14 @@ class ActorCriticTDAgent(ActorCriticMonteCarlo.ActorCriticAgent):
         super(ActorCriticTDAgent, self).__init__(s_size, a_size, hp)
         self._total_updates = hp.get('total_updates', 0)
         self._td_n = hp.get('td_n', 1)
+        
+    def act(self, state: torch.Tensor) -> Action:
+        return super(ActorCriticMonteCarlo.ActorCriticAgent, self).act(state)
+    
+    def compute_advantage(self, returns: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
+        advantages = returns.detach() - values.detach()
+        logging.debug(F'advantages:\n{advantages}')
+        return advantages.detach()
         
     def reinforce(self, experiences: MutableSequence[Experience], new_experiences: int):
         logging.info(f"reinforce: {len(experiences)} experiences, {new_experiences} new experiences")
@@ -39,8 +52,19 @@ class ActorCriticTDAgent(ActorCriticMonteCarlo.ActorCriticAgent):
         sample = range(len(experiences) - new_experiences, len(experiences) - self._td_n + 1)
         mini_batch = [[experiences[k] for k in range(i, i + self._td_n)] for i in sample]
         self.reinforce_actor(mini_batch)
-        self._total_updates += 1
-        experiences.clear()
+        if len(experiences) < MINI_BATCH_SIZE:
+            return
+        for i in range(int(new_experiences / STEP_PER_UPDATE)):
+            sample = random.sample(range(len(experiences)), MINI_BATCH_SIZE)
+            mini_batch = [[experiences[k]] for k in sample]
+            
+            values = self.values(mini_batch)
+            logging.debug(F'values:\n{values}, values.shape: {values.shape}')
+            
+            # Compute returns
+            returns = self.compute_returns_from_experiences(mini_batch)
+            self.reinforce_critic(values, returns.detach())
+            self._total_updates += 1
 
     def get_state_dict(self) -> Dict[str, Any]:
         state = super(ActorCriticTDAgent, self).get_state_dict()
