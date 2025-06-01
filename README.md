@@ -1,6 +1,6 @@
 # Gymnasium Player
 
-Experiment agents with reinforcement learning algorithms algorithms:
+Experiment agents with reinforcement learning algorithms:
 
 * Deep Q-Network
 * Policy Gradient
