@@ -31,6 +31,7 @@ def play_episode(env,
         agent (Agent): The agent to use for playing the episode.
         experiences (List[Experience]): List of experiences to collect.
         frame_buffer (List[np.ndarray]): Buffer to store frames for rendering.
+        delay (int): Delay in milliseconds between frames.
     Returns:
         Tuple[float, int]: The total reward and the number of steps.
     """

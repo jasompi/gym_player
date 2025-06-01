@@ -203,6 +203,48 @@ class TestPlayMain(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             self.run_test(env_id, policy, tmpdir)
             
+    def test_Pong_RandomPolicy(self):
+        env_id = 'Pong-PLE-v0'
+        policy = 'RandomPolicy'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+
+    def test_Pong_PolicyGradient(self):
+        env_id = 'Pong-PLE-v0'
+        policy = 'PolicyGradient'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+            
+    def test_Pong_ActorCritic(self):
+        env_id = 'Pong-PLE-v0'
+        policy = 'ActorCriticMonteCarlo'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+
+    def test_Pong_ActorCriticTD(self):
+        env_id = 'Pong-PLE-v0'
+        policy = 'ActorCriticTD'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+
+    def test_Pong_DeepQNetwork(self):
+        env_id = 'Pong-PLE-v0'
+        policy = 'DeepQNetwork'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+
+    def test_Pong_SARSA(self):
+        env_id = 'Pong-PLE-v0'
+        policy = 'SARSA'
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_test(env_id, policy, tmpdir)
+            
     def test_PolicyGradient_compute_returns(self):
         env_id = 'CartPole-v1'
         env = gym.make(env_id)

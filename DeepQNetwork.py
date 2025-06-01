@@ -37,7 +37,7 @@ hyperparameters = {
         'layers': [64, 64],
         'gamma': 0.995,
         'lr': 0.001,
-        'tau': 0.0,
+        'tau': 0.001,
         'epsilon_min': 0.01,
         'epsilon_decay': 0.995,
     },

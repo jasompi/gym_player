@@ -31,6 +31,23 @@ def LunarLander_preprocess_experiences(experiences: MutableSequence[Experience],
             experiences[i] = Experience(ex.state, ex.action, ex.reward * 2, ex.done, ex.truncated, ex.next_state, ex.next_action, ex.log_prob, ex.value, ex.next_value)
     return experiences
 
+def Pong_preprocess_experiences(experiences: MutableSequence[Experience], new_experiences: int) -> MutableSequence[Experience]:
+    # Preprocess the experience for Pong
+    total_reward = 0
+    for i in range(len(experiences) - new_experiences, len(experiences)):
+        ex = experiences[i]
+        total_reward += ex.reward
+        reward = ex.reward
+        p_y, p_v_y, c_y, x, y, v_x, v_y = ex.state.numpy()
+        if x < 7 and v_x > 0: # hit the ball
+            reward = 1.0
+        if v_x < 0: # ball is moving towards the player
+            reward += 1.0 / (1.0 + (y - v_y * x / v_x - p_y) ** 2) # reward for getting closer to the ball
+        logging.debug(f'reward: {reward}, p_y: {p_y:.1f}, p_v_y: {p_v_y:.1f}, c_y: {c_y:.1f}, x: {x:.1f}, y: {y:.1f}, v_x: {v_x:.1f}, v_y: {v_y:.1f}')
+        experiences[i] = Experience(ex.state, ex.action, reward, ex.done, ex.truncated, ex.next_state, ex.next_action, ex.log_prob, ex.value, ex.next_value)
+    
+    return experiences
+
 hyperparameters = {
     'default': {
         'layers': [],
@@ -55,6 +72,12 @@ hyperparameters = {
         'gamma': 0.99,
         'lr': 0.0001,
         'prep': None
+    },
+    'Pong': {
+        'layers': [16],
+        'gamma': 0.9,
+        'lr': 0.001,
+        'prep': Pong_preprocess_experiences,
     },
 }
 

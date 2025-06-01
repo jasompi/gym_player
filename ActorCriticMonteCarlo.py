@@ -39,6 +39,12 @@ hyperparameters['Pixelcopter'].update({
     'critic_anchor_strength': 0.001,
     'normalize_returns': False,
 })
+hyperparameters['Pong'].update({
+    'lr': 0.001,
+    'c_layers': [16],
+    'beta': 0.001,
+    'normalize_returns': False,
+})
 
 class Critic(nn.Module):
     def __init__(self, s_size: int, a_size: int, h_sizes: List[int]):
