@@ -7,5 +7,7 @@
         "*_test.py"
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "python.languageServer": "None",
+    "idf.pythonInstallPath": "/usr/local/bin/python"
 }

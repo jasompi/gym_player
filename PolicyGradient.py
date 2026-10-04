@@ -97,7 +97,7 @@ class Actor(nn.Module):
 class PolicyGradientAgent(Agent):
     def __init__(self, s_size: int, a_size: int, hp : Dict[str, Any]={}):
         super(PolicyGradientAgent, self).__init__()
-        self._actor = Actor(s_size, a_size, hp['layers']).to(device)
+        self._actor = self.create_actor(s_size, a_size, hp['layers'])
         self._actor_optimizer = None
         self._hp = hp
         self._gamma = hp['gamma']
@@ -110,6 +110,9 @@ class PolicyGradientAgent(Agent):
 
     def train(self, train: bool):
         return self._actor.train(train)
+    
+    def create_actor(self, s_size: int, a_size: int, h_sizes: List[int]) -> nn.Module:
+        return Actor(s_size, a_size, h_sizes).to(device)
     
     def act(self, state: torch.Tensor) -> Action:
         t_state = state.unsqueeze(0).to(device)
